@@ -16,7 +16,8 @@ Alternatively, you can copy and paste the contents of [Library/pyhuskylens.py](L
 
 To connect the Huskylens to your hub [use a breakout board](https://antonsmindstorms.com/product/uart-breakout-board-for-spike-and-ev3-openmv-compatible/) or [solder the included cable to a spare Wedo wire](#)
 
-Warning: Unless you power the HuskyLens with an extra powerbank over usb, it will randomly crash during use, if it has a firmware of of 0.5. The problem is not with this Python library.
+## Warning for Huskylens firmware 0.5+ and SPIKE/Robot Inventor##
+Unless you power the HuskyLens with an extra power bank over USB, it will randomly crash during use. The problem is not with this Python library. Either supply extra power or downgrade to 0.4.7
 
 ## Mindstorms EV3
 Todo.

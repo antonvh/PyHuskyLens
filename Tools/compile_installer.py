@@ -2,14 +2,15 @@
 
 # Run this on a Mac or Linux machine to create/update 'SPIKEInstaller.py'
 # Copy the contents of SPIKEInstaller.py into an empty SPIKE Prime project
-# And run to install
+# And run to install:
+# pipenv run python3 compile_installer.py 
 
 import binascii, mpy_cross, time
 import hashlib
 
-SOURCE = 'pyhuskylens.py'
+SOURCE = '../Library/pyhuskylens.py'
 DESTINATION = 'pyhuskylens.mpy'
-INSTALLER = 'SPIKEInstaller.py'
+INSTALLER = '../Library/SPIKEInstaller.py'
 mpy_cross.run('-march=armv6', SOURCE,'-o', DESTINATION)
 
 # Should be done in a second!

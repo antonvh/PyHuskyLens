@@ -98,20 +98,21 @@ class Block:
             self.ID)
 
 class HuskyLens():
-    def __init__(self, port_str, baud=9600, debug=False):
+    def __init__(self, port_str, baud=9600, debug=False, pwm=0):
         self.debug = debug
         self.uart = eval("port."+port_str)
         self.uart.mode(1)
         sleep_ms(300)
         self.uart.baud(baud)
+        self.uart.pwm(pwm)
+        if pwm: sleep_ms(2200) # Give the huskylens some time to boot
         sleep_ms(300)
         self.uart.read(32)
         self.next_write = ticks_ms()
         if not self.knock():
             print("Huskylens connection failed. Check wires and port is {}?".format(port_str))
         else:
-            # if debug:
-                print("Connected")
+            print("Connected")
 
     @staticmethod
     def calc_checksum(data):
@@ -128,9 +129,7 @@ class HuskyLens():
         else:
             sleep_ms(5)
 
-    def force_read(self, size=1, max_tries=50, search=b''):
-        # SPIKE and OpenMV reads too fast and sometimes returns None
-
+    def force_read(self, size=1, max_tries=150, search=b''):
         data = b''
         r=self.uart.read(size)
         for i in range(max_tries):
@@ -154,10 +153,6 @@ class HuskyLens():
 
     def read_cmd(self):
         payload = b''
-        # for c in HEADER:
-        #     r = self.force_read(search=byte(c))
-            # while r != byte(c):
-            #     r = self.force_read()
         r = self.force_read(search=HEADER)
         if r is not HEADER:
             if self.debug: print("No answer from huskylens")
@@ -195,8 +190,12 @@ class HuskyLens():
         if ret != RETURN_INFO:
             if self.debug: 
                 print("Expected info")
+            return {}
 
-        n_blocks_arrows, n_ids, frame, _, _ = struct.unpack('hhhhh',info)
+        try:
+            n_blocks_arrows, n_ids, frame, _, _ = struct.unpack('hhhhh',info)
+        except:
+            n_blocks_arrows, n_ids, frame = (0,0,0)
         if self.debug: print(n_blocks_arrows, n_ids, frame)
 
         for i in range(n_blocks_arrows):

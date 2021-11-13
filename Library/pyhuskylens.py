@@ -2,7 +2,11 @@ from time import sleep_ms, ticks_ms
 import struct
 from micropython import const
 from math import atan2, degrees
-from hub import port
+try:
+    from hub import port
+except:
+    from pybricks.iodevices import UARTDevice
+
 
 def byte(num):
     return bytes([num])
@@ -98,17 +102,22 @@ class Block:
             self.ID)
 
 class HuskyLens():
-    def __init__(self, port_str, baud=9600, debug=False, pwm=0):
+    def __init__(self, port, baud=9600, debug=False, pwm=0):
         self.debug = debug
-        self.uart = eval("port."+port_str)
-        self.uart.mode(1)
-        sleep_ms(300)
-        self.uart.baud(baud)
-        self.uart.pwm(pwm)
-        if pwm: sleep_ms(2200) # Give the huskylens some time to boot
-        sleep_ms(300)
-        self.uart.read(32)
-        self.next_write = ticks_ms()
+        if type(port) == str:
+            # We're on SPIKE/Robot Inventor
+            self.uart = eval("port."+port)
+            self.uart.mode(1)
+            sleep_ms(300)
+            self.uart.baud(baud)
+            self.uart.pwm(pwm)
+            if pwm: sleep_ms(2200) # Give the huskylens some time to boot
+            sleep_ms(300)
+            self.uart.read(32)
+            self.next_write = ticks_ms()
+        else:
+            # We're probably on ev3dev/pybricks
+            self.uart = UARTDevice(port, baud)
         if not self.knock():
             print("Huskylens connection failed. Check wires and port is {}?".format(port_str))
         else:

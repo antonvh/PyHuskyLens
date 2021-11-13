@@ -1,0 +1,6 @@
+#Test from within pybricks-repl
+from pybricks.iodevices import UARTDevice
+from pybricks.parameters import Port, Stop, Direction, Button, Color
+port = Port.S1
+baud = 9600
+uart = UARTDevice(port, baud)

@@ -102,11 +102,11 @@ class Block:
             self.ID)
 
 class HuskyLens():
-    def __init__(self, port, baud=9600, debug=False, pwm=0):
+    def __init__(self, port_str, baud=9600, debug=False, pwm=0):
         self.debug = debug
-        if type(port) == str:
+        if type(port_str) == str:
             # We're on SPIKE/Robot Inventor
-            self.uart = eval("port."+port)
+            self.uart = eval("port."+port_str)
             self.uart.mode(1)
             sleep_ms(300)
             self.uart.baud(baud)
@@ -117,7 +117,7 @@ class HuskyLens():
             self.next_write = ticks_ms()
         else:
             # We're probably on ev3dev/pybricks
-            self.uart = UARTDevice(port, baud)
+            self.uart = UARTDevice(port_str, baud)
         if not self.knock():
             print("Huskylens connection failed. Check wires and port is {}?".format(port_str))
         else:

@@ -36,11 +36,11 @@ print(hl.get_version())
 hl.clear_text()
 hl.show_text("hello from SPIKE", position=(120,120))
 
-# Get x/y loc of a face
 print("Starting face recognition")
 hl.set_alg(ALGORITHM_FACE_RECOGNITION)
 
 while not button.right.is_pressed():
+    # Get x/y loc of a face
     blocks = hl.get_blocks()
     if len(blocks) > 0:
         face_x = blocks[0].x

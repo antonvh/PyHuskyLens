@@ -24,19 +24,31 @@ Todo.
 
 # Example code
 ``` python
-from projects.pyhuskylens import HuskyLens, ALGORITHM_FACE_RECOGNITION
+from hub import button
+from projects.mpy_robot_tools.pyhuskylens import HuskyLens, ALGORITHM_FACE_RECOGNITION
 
-hl = HuskyLens('E', debug=False)
+hl = HuskyLens('A', debug=False)
 
+# This returns '.': OK and no payload on firmware 0.5.1 may not work on newer
 print(hl.get_version())
 
 # Show some text on screen
-print("Clearing screen")
 hl.clear_text()
-print("Displaying text")
 hl.show_text("hello from SPIKE", position=(120,120))
+
+# Get x/y loc of a face
 print("Starting face recognition")
 hl.set_alg(ALGORITHM_FACE_RECOGNITION)
+
+while not button.right.is_pressed():
+    blocks = hl.get_blocks()
+    if len(blocks) > 0:
+        face_x = blocks[0].x
+        face_y = blocks[0].y
+        error_x = (face_x-155)
+        error_y = (face_y-120)
+        print('face found:', face_x,face_y)
+
 ```
 
 # TODO

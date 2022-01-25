@@ -22,7 +22,7 @@ To connect the Huskylens to your hub [use a breakout board](https://antonsmindst
 
 Further details on pinout and ID1/ID2 [here.](https://www.philohome.com/wedo2reverse/connect.htm) Details on the pinout of the HuskeyLens [here](https://wiki.dfrobot.com/HUSKYLENS_V1.0_SKU_SEN0305_SEN0336#target_3) (Pin1=Tx=Green Pin2=Rx=Blue)
 
-Powering the Huskylens is done with a USB battery pack or LPF by wireing in a 3V3 buck converter. If you set the port to 100% PWM, M+ will be about 8V and M- will be 0V (GND). ***Warning*** that using LPF-Motor(M1/M2 lines) the Huskeylens firmware 0.5+ and SPIKE/Robot Inventor The Huskylens will randomly crash during use, unless you power it over USB (example, USB battery pack). Either supply extra power or downgrade to [firmware](https://github.com/HuskyLens/HUSKYLENSUploader)0.4.7
+Powering the Huskylens is done with a USB battery pack or LPF by wireing in a 3V3 buck converter. If you set the port to 100% PWM, M+ will be about 8V and M- will be 0V (GND). ***Warning*** that using LPF-Motor(M1/M2 lines) the Huskeylens firmware 0.5+ and SPIKE/Robot Inventor The Huskylens will randomly crash during use, unless you power it over USB (example, USB battery pack or a LPF/buck converter). Either supply extra power or downgrade to [firmware](https://github.com/HuskyLens/HUSKYLENSUploader)0.4.7
 
 # Spike/51515 Example code
 ``` python

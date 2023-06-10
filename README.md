@@ -1,4 +1,4 @@
-# LEGO Huskylens Library
+# PyHuskyLens Library
 The purpose of this library is to allow connecting LEGO robots to the Huskylens. 
 It uses MicroPython and should work on LEGO MINDSTORMS EV3, LEGO SPIKE Prime, and LEGO MINDSTORMS 51515 Robot Inventor.
 

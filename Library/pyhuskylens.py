@@ -1,11 +1,16 @@
-from time import sleep_ms, ticks_ms
 import struct
+import time
 from micropython import const
 from math import atan2, degrees
 try:
     from hub import port
 except:
+    pass
+
+try:
     from pybricks.iodevices import UARTDevice
+except:
+    pass
 
 
 def byte(num):
@@ -108,13 +113,13 @@ class HuskyLens():
             # We're on SPIKE/Robot Inventor
             self.uart = eval("port."+port_str)
             self.uart.mode(1)
-            sleep_ms(300)
+            time.sleep_ms(300)
             self.uart.baud(baud)
             self.uart.pwm(pwm)
-            if pwm: sleep_ms(2200) # Give the huskylens some time to boot
-            sleep_ms(300)
+            if pwm: time.sleep_ms(2200) # Give the huskylens some time to boot
+            time.sleep_ms(300)
             self.uart.read(32)
-            self.next_write = ticks_ms()
+            self.next_write = time.ticks_ms()
         else:
             # We're probably on ev3dev/pybricks
             self.uart = UARTDevice(port_str, baud)
@@ -136,7 +141,7 @@ class HuskyLens():
             pass
             print("Sent: ",data)
         else:
-            sleep_ms(5)
+            time.sleep_ms(5)
 
     def force_read(self, size=1, max_tries=150, search=b''):
         data = b''
@@ -153,7 +158,7 @@ class HuskyLens():
             elif len(data) == size:
                 return data
             
-            sleep_ms(1)
+            time.sleep_ms(1)
             r=self.uart.read(1)
 
             if i > 3 and self.debug:
@@ -256,7 +261,7 @@ class HuskyLens():
         params[3] = position[1]
         params[4:] = bytes(text, "UTF-8")
         self.write_cmd(REQUEST_CUSTOM_TEXT, params)
-        sleep_ms(40)
+        time.sleep_ms(40)
         return self.check_ok()
 
     def clear_text(self):

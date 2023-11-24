@@ -2,22 +2,18 @@ import struct
 import time
 from micropython import const
 from math import atan2, degrees
-try:
-    from hub import port
-except:
-    pass
-
-try:
-    from pybricks.iodevices import UARTDevice
-except:
-    pass
-
 
 def byte(num):
+    # Convert an in int to a byte. Supposing it is < 255
     return bytes([num])
 
 HEADER = b'\x55\xaa\x11'
 FAILED = b''
+
+EV3PYBRICKS = const(0)
+INVENTOR = const(1)
+ESP32I2C = const(3)
+OPENMV = const(4)
 
 (REQUEST, #0x20 = 32 etc....
 REQUEST_BLOCKS,
@@ -87,6 +83,15 @@ class Arrow:
             self.y_head,
             self.direction,
             self.ID)
+        
+    def to_bytes(self):
+        return struct.pack('5hB', 
+            self.x_tail,
+            self.y_tail,
+            self.x_head,
+            self.y_head,
+            self.direction,
+            self.ID)
 
 class Block:
     def __init__(self, x, y , width , height, ID):
@@ -105,28 +110,41 @@ class Block:
             self.width,
             self.height,
             self.ID)
+    
+    def to_bytes(self):
+        return struct.pack('4hB',
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+            self.ID)
 
 class HuskyLens():
-    def __init__(self, port_str, baud=9600, debug=False, pwm=0):
+    def __init__(self, port, baud=9600, debug=False, pwm=0):
         self.debug = debug
-        if type(port_str) == str:
-            # We're on SPIKE/Robot Inventor
-            self.uart = eval("port."+port_str)
+        port_dir = dir(port)
+        if "split" in port_dir:
+            from hub import port
+            # A string. We're on SPIKE/Robot Inventor
+            self.uart = eval("port."+port)
             self.uart.mode(1)
             time.sleep_ms(300)
             self.uart.baud(baud)
+            # Put voltage on M+ or M- leads
             self.uart.pwm(pwm)
             if pwm: time.sleep_ms(2200) # Give the huskylens some time to boot
             time.sleep_ms(300)
             self.uart.read(32)
             self.next_write = time.ticks_ms()
-        else:
+            self.mode = INVENTOR
+        elif "A" in port_dir:
             # We're probably on ev3dev/pybricks
-            self.uart = UARTDevice(port_str, baud)
-        if not self.knock():
-            print("Huskylens connection failed. Check wires and port is {}?".format(port_str))
-        else:
-            print("Connected")
+            from pybricks.iodevices import UARTDevice
+            self.uart = UARTDevice(port, baud)
+            self.mode = EV3PYBRICKS
+        elif "readfrom" in port_dir:
+            self.mode = ESP32I2C
+            self.i2c = port
 
     @staticmethod
     def calc_checksum(data):
@@ -136,39 +154,59 @@ class HuskyLens():
         length = byte(len(payload))
         data = HEADER + length + command + payload
         data += self.calc_checksum(data)
-        self.uart.write(data)
+        
+        if self.mode == INVENTOR or self.mode == EV3PYBRICKS:
+            self.uart.write(data)
+        elif self.mode == ESP32I2C:
+            try:
+                self.i2c.writeto_mem(50,12,data)
+            except Exception as e: #Probably ENoDevice
+                if self.debug: print(e)
+                return
+            
         if self.debug: 
-            pass
             print("Sent: ",data)
         else:
+            # Throttle a bit
             time.sleep_ms(5)
 
     def force_read(self, size=1, max_tries=150, search=b''):
         data = b''
-        r=self.uart.read(size)
-        for i in range(max_tries):
-            if r==None:
-                # On SPIKE b'' is returned, on OpenMV None
-                r=b''
-            data += r
-            if search:
-                if len(data) >= len(search):
-                    if data[-len(search):] == search:
-                        return search
-            elif len(data) == size:
-                return data
-            
-            time.sleep_ms(1)
-            r=self.uart.read(1)
+        if search != b'':
+            size = len(search)
+        if self.mode == INVENTOR or self.mode == EV3PYBRICKS:
+            r=self.uart.read(size)
+            for i in range(max_tries):
+                if r==None: # On SPIKE b'' is returned, on OpenMV None
+                    r=b''
+                data += r
+                
+                if len(data) == size:
+                    return data
+                elif search:
+                    if len(data) >= len(search):
+                        if data[-len(search):] == search:
+                            return search
+                
+                time.sleep_ms(1)
+                r=self.uart.read(1)
 
-            if i > 3 and self.debug:
-                print("Waiting for data in force read. Tries:", i)
+                if i > 3 and self.debug:
+                    print("Waiting for data in force read. Tries:", i)
+    
+        elif self.mode == ESP32I2C:
+            try:
+                data = self.i2c.readfrom(50, size)
+            except Exception as e: #Probably ENODevice
+                data = b''
+                if self.debug: print(e)
+                
         return data
 
     def read_cmd(self):
         payload = b''
         r = self.force_read(search=HEADER)
-        if r is not HEADER:
+        if r != HEADER:
             if self.debug: print("No answer from huskylens")
             return FAILED, "No header"
         length = self.force_read(1)
@@ -181,13 +219,18 @@ class HuskyLens():
             return FAILED, "Bad checksum"
         return command, payload
 
-    def check_ok(self):
-        answer_cmd, answer_params = self.read_cmd()
-        if answer_cmd == RETURN_OK: 
-            return True
-        else:
-            print("Expected OK, but got:", answer_cmd, answer_params)
-            return False
+    def check_ok(self, timeout=1):
+        result = False
+        for i in range(timeout):
+            answer_cmd, answer_params = self.read_cmd()
+            if answer_cmd == RETURN_OK: 
+                result = True
+                break
+            elif self.debug:
+                print("Try ",i,". Expected OK, but got:", answer_cmd, answer_params)
+            time.sleep_ms(1)
+        
+        return result
 
     def knock(self):
         self.write_cmd(REQUEST_KNOCK)
@@ -195,7 +238,7 @@ class HuskyLens():
         
     def set_alg(self, algorithm):
         self.write_cmd(REQUEST_ALGORITHM, payload=struct.pack('h', algorithm))
-        return self.check_ok()
+        return self.check_ok(timeout=40)
 
     def process_info(self):
         blocks = []
@@ -233,7 +276,11 @@ class HuskyLens():
             self.write_cmd(REQUEST_BLOCKS_LEARNED)
         else:
             self.write_cmd(REQUEST_BLOCKS)
-        return self.process_info()[BLOCKS]
+        result = self.process_info()
+        if BLOCKS in result:
+            return result[BLOCKS]
+        else:
+            return []
 
     def get_arrows(self, ID=None, learned=False):
         if ID:
@@ -242,7 +289,11 @@ class HuskyLens():
             self.write_cmd(REQUEST_ARROWS_LEARNED)
         else:
             self.write_cmd(REQUEST_ARROWS)
-        return self.process_info()[ARROWS]
+        result = self.process_info()
+        if ARROWS in result:
+            return result[ARROWS]
+        else:
+            return []
 
     def get(self, ID=None, learned=False):
         if ID:
@@ -261,8 +312,7 @@ class HuskyLens():
         params[3] = position[1]
         params[4:] = bytes(text, "UTF-8")
         self.write_cmd(REQUEST_CUSTOM_TEXT, params)
-        time.sleep_ms(40)
-        return self.check_ok()
+        return self.check_ok(timeout=40)
 
     def clear_text(self):
         self.write_cmd(REQUEST_CLEAR_TEXT)

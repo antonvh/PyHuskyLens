@@ -1,3 +1,6 @@
+# Copy this file in a new Pybricks program.
+# Also copy pupremote.py in a new Pybricks program with exactly that name.
+
 from pybricks.parameters import Button, Color, Direction, Port, Side, Stop
 from pupremote import PUPRemoteHub
 from pybricks.tools import wait, StopWatch

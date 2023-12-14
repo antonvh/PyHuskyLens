@@ -15,15 +15,19 @@ from machine import SoftI2C, Pin
 # GND (black line)
 # IO2 (blue line)
 # IO26 (green line)
-i2c = SoftI2C(scl=Pin(2), sda=Pin(26))
+
+# Initialize i2c. Timeout is 2000 microseconds, because PUPremote balks if a
+# function hangs much longer.
+i2c = SoftI2C(scl=Pin(2), sda=Pin(26), timeout=2000)
 
 hlens = HuskyLens(i2c)
 
 def hl(*argv):
     global hlens
     if argv:
-        print(hlens.set_alg(argv[0]))
-        print(hlens.knock())
+        if not hlens.set_alg(argv[0]):
+            # There was a problem setting the mode. Return id -1
+            return (0,0,0,0,-1)
             
     else:
         blocks = hlens.get_blocks()
@@ -33,6 +37,9 @@ def hl(*argv):
             blocks[0].width,
             blocks[0].height,
             blocks[0].ID)
+        else:
+            # No blocks found, return all zeroes.
+            return (0,0,0,0,0)
 
 def msg(*argv):
     if argv!=():
@@ -48,7 +55,7 @@ def num(*argv):
     else:
         print("num called without args")
     value += 1
-    return 2*value,-3*value,4*value
+    return -2*value,-2*value,-2*value
 
 sm_data=None
 def sdata(*argv):

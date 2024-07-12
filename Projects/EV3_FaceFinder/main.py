@@ -22,5 +22,5 @@ ev3.speaker.beep()
 
 hl = HuskyLens(Port.S1)
 wait(500)
-hl.show_text("Hello from EV3")
+hl.show_text("Hello from EV3 yourself")
 hl.set_alg(ALGORITHM_FACE_RECOGNITION)

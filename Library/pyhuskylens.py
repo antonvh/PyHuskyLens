@@ -117,20 +117,22 @@ class Block:
 
 
 class HuskyLens:
-    def __init__(self, port, baud=9600, debug=False, pwm=0):
+    def __init__(self, hl_port, baud=9600, debug=False, pwm=0, power=False):
         self.debug = debug
-        port_dir = dir(port)
+        port_dir = dir(hl_port)
         if "split" in port_dir:
             from hub import port
 
             # A string. We're on SPIKE/Robot Inventor
-            self.uart = eval("port." + port)
+            self.uart = eval("port." + hl_port)
             self.uart.mode(1)
             time.sleep_ms(300)
             self.uart.baud(baud)
             # Put voltage on M+ or M- leads
-            self.uart.pwm(pwm)
+            if power:
+                pwm = 100
             if pwm:
+                self.uart.pwm(pwm)
                 time.sleep_ms(2200)  # Give the huskylens some time to boot
             time.sleep_ms(300)
             self.uart.read(32)
@@ -140,11 +142,11 @@ class HuskyLens:
             # We're probably on ev3dev/pybricks
             from pybricks.iodevices import UARTDevice
 
-            self.uart = UARTDevice(port, baud)
+            self.uart = UARTDevice(hl_port, baud)
             self.mode = EV3PYBRICKS
         elif "readfrom" in port_dir:
             self.mode = ESP32I2C
-            self.i2c = port
+            self.i2c = hl_port
 
     @staticmethod
     def calc_checksum(data):

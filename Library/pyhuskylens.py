@@ -118,6 +118,15 @@ class Block:
 
 class HuskyLens:
     def __init__(self, hl_port, baud=9600, debug=False, pwm=0, power=False):
+        """Instantiatiates a huskylens object for communication with a HuskyLens.
+
+        Args:
+            hl_port (str, pybricks Port object or i2c object): The port to which you connected the HL
+            baud (int, optional): Baud rate for serial mode. Defaults to 9600.
+            debug (bool, optional): Print debug info. Defaults to False.
+            pwm (int, optional): Voltage % output on SPIKE hub. Defaults to 0.
+            power (bool, optional): Alternative way to enable power - by setting True. Defaults to False.
+        """
         self.debug = debug
         port_dir = dir(hl_port)
         if "split" in port_dir:

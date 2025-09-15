@@ -51,15 +51,23 @@ OPENMV = const(4)
 ) = [byte(x) for x in range(0x20, 0x3E)]
 RETURN_IS_PRO = REQUEST_IS_PRO
 
-
+#: Switch to Face Recognition mode with HuskyLens.set_alg()
 ALGORITHM_FACE_RECOGNITION = const(0)
+#: Switch to Object Tracking mode with HuskyLens.set_alg()
 ALGORITHM_OBJECT_TRACKING = const(1)
+#: Switch to Object Recognition mode with HuskyLens.set_alg()
 ALGORITHM_OBJECT_RECOGNITION = const(2)
+#: Switch to Line Tracking mode with HuskyLens.set_alg()
 ALGORITHM_LINE_TRACKING = const(3)
+#: Switch to Color Recognition mode with HuskyLens.set_alg()
 ALGORITHM_COLOR_RECOGNITION = const(4)
+#: Switch to Tag Recognition mode with HuskyLens.set_alg()
 ALGORITHM_TAG_RECOGNITION = const(5)
+#: Switch to Object Classification mode with HuskyLens.set_alg()
 ALGORITHM_OBJECT_CLASSIFICATION = const(6)
+#: Switch to QR Code Recognition mode with HuskyLens.set_alg()
 ALGORITHM_QR_CODE_RECOGNITION = const(7)
+#: Switch to Barcode Recognition mode with HuskyLens.set_alg()
 ALGORITHM_BARCODE_RECOGNITION = const(8)
 
 ARROWS = const(1)
@@ -68,6 +76,19 @@ FRAME = const(3)
 
 
 class Arrow:
+    """Arrow class to manipulate arrow results.
+    
+    :param x_tail: x coordinate of the tail of the arrow
+    :type x_tail: int
+    :param y_tail: y coordinate of the tail of the arrow
+    :type y_tail: int
+    :param x_head: x coordinate of the head of the arrow
+    :type x_head: int
+    :param y_head: y coordinate of the head of the arrow
+    :type y_head: int
+    :param ID: ID of the arrow, 0 if unlearned
+    :type ID: int
+    """
     def __init__(self, x_tail, y_tail, x_head, y_head, ID):
         self.x_tail = x_tail
         self.y_tail = y_tail
@@ -86,6 +107,11 @@ class Arrow:
         )
 
     def to_bytes(self):
+        """Returns the arrow data as a byte array.
+        
+        :return: byte array with x_tail, y_tail, x_head, y_head, direction and ID
+        :rtype: bytes, 5 halfwords and 1 unsigned byte (5hB)
+        """
         return struct.pack(
             "5hB",
             self.x_tail,
@@ -98,6 +124,14 @@ class Arrow:
 
 
 class Block:
+    """Block class to manipulate block results.
+    
+    :param x: x coordinate of the center of the block
+    :param y: y coordinate of the center of the block
+    :param width: width of the block
+    :param height: height of the block
+    :param ID: ID of the block, 0 if unlearned
+    """
     def __init__(self, x, y, width, height, ID):
         self.x = x
         self.y = y
@@ -113,20 +147,34 @@ class Block:
         )
 
     def to_bytes(self):
+        """Returns the block data as a byte array.
+
+        :return: byte array with x, y, width, height and ID
+        :rtype: bytes, 4 halfwords and 1 unsigned byte (4hB)
+        """
         return struct.pack("4hB", self.x, self.y, self.width, self.height, self.ID)
 
 
 class HuskyLens:
-    def __init__(self, hl_port, baud=9600, debug=False, pwm=0, power=False):
-        """Instantiatiates a huskylens object for communication with a HuskyLens.
+    """Instantiatiates a huskylens object for communication with a HuskyLens.
 
-        Args:
-            hl_port (str, pybricks Port object or i2c object): The port to which you connected the HL
-            baud (int, optional): Baud rate for serial mode. Defaults to 9600.
-            debug (bool, optional): Print debug info. Defaults to False.
-            pwm (int, optional): Voltage % output on SPIKE hub. Defaults to 0.
-            power (bool, optional): Alternative way to enable power - by setting True. Defaults to False.
-        """
+    :param hl_port: Port where the HuskyLens is connected.
+        On SPIKE/Robot Inventor, this is a string with the port name, e.g. 'A'.
+        On ev3dev/pybricks, this is the port object, e.g. Port.S1
+        On ESP32 with I2C, this is the SoftI2C object.
+    :type hl_port: str or Port or SoftI2C
+    :param baud: Baud rate for UART communication, defaults to 9600
+    :type baud: int, optional
+    :param debug: If True, debug messages are printed, defaults to False
+    :type debug: bool, optional
+    :param pwm: If > 0, power the HuskyLens from the port with this PWM value (0-100), defaults to 0
+    :type pwm: int, optional
+    :param power: If True, power the HuskyLens from the port with 100% PWM, defaults to False
+    :type power: bool, optional
+    """
+        
+    def __init__(self, hl_port, baud=9600, debug=False, pwm=0, power=False):
+        
         self.debug = debug
         port_dir = dir(hl_port)
         if "split" in port_dir:
@@ -265,10 +313,22 @@ class HuskyLens:
         return result
 
     def knock(self):
+        """Tests the connection
+
+        :return: True if the the HL is connected.
+        :rtype: boolean
+        """
         self.write_cmd(REQUEST_KNOCK)
         return self.check_ok()
 
     def set_alg(self, algorithm):
+        """Set image recognition algorithm
+
+        :param algorithm: Desired algorithm (see constants)
+        :type algorithm: int
+        :return: True if switch succeeded
+        :rtype: boolean
+        """
         self.write_cmd(REQUEST_ALGORITHM, payload=struct.pack("h", algorithm))
         return self.check_ok(timeout=40)
 
@@ -301,6 +361,15 @@ class HuskyLens:
         return {BLOCKS: blocks, ARROWS: arrows, FRAME: frame}
 
     def get_blocks(self, ID=None, learned=False):
+        """Get detected blocks
+        
+        :param ID: If set, only return blocks with this ID
+        :type ID: int, optional
+        :param learned: If True, only return learned blocks
+        :type learned: bool, optional
+        :return: Detected Blocks
+        :rtype: list of Block objects
+        """
         if ID:
             self.write_cmd(REQUEST_BLOCKS_BY_ID, struct.pack("h", ID))
         elif learned:
@@ -314,6 +383,15 @@ class HuskyLens:
             return []
 
     def get_arrows(self, ID=None, learned=False):
+        """Get detected arrows
+        
+        :param ID: If set, only return arrows with this ID
+        :type ID: int, optional
+        :param learned: If True, only return learned arrows
+        :type learned: bool, optional
+        :return: Detected Arrows
+        :rtype: list of Arrow objects
+        """
         if ID:
             self.write_cmd(REQUEST_ARROWS_BY_ID, struct.pack("h", ID))
         elif learned:
@@ -327,6 +405,15 @@ class HuskyLens:
             return []
 
     def get(self, ID=None, learned=False):
+        """Get detected blocks and arrows
+        
+        :param ID: If set, only return objects with this ID
+        :type ID: int, optional
+        :param learned: If True, only return learned objects
+        :type learned: bool, optional
+        :return: Detected Blocks and Arrows
+        :rtype: dict with keys BLOCKS and ARROWS
+        """
         if ID:
             self.write_cmd(REQUEST_BY_ID, struct.pack("h", ID))
         elif learned:
@@ -336,6 +423,15 @@ class HuskyLens:
         return self.process_info()
 
     def show_text(self, text, position=(10, 10)):
+        """Show text on the HuskyLens screen
+        
+        :param text: Text to show (max 13 characters)
+        :type text: str
+        :param position: Position (x,y) to show the text, defaults to (10,10)
+        :type position: tuple, optional
+        :return: True if the command was successful
+        :rtype: bool
+        """
         params = bytearray(len(text) + 4)
         params[0] = len(text)
         params[1] = 0 if position[0] <= 255 else 0xFF
@@ -346,11 +442,21 @@ class HuskyLens:
         return self.check_ok(timeout=40)
 
     def clear_text(self):
+        """Clear text on the HuskyLens screen
+        
+        :return: True if the command was successful
+        :rtype: bool
+        """
         self.write_cmd(REQUEST_CLEAR_TEXT)
         return self.check_ok()
 
     def get_version(self):
-        # This returns '.': OK and no payload on firmware 0.5.1
+        """Get the firmware version of the HuskyLens
+        (This returns '.': OK and no payload on firmware 0.5.1)
+        
+        :return: Firmware version string, or None if the version could not be read
+        :rtype: str or None
+        """
         self.write_cmd(REQUEST_FIRMWARE_VERSION)
         c, p = self.read_cmd()
         if not c:

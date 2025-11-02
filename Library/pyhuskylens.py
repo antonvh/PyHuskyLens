@@ -57,16 +57,21 @@ CMD_ACTION_DRAW_RECT_V2 = const(0x56)
 CMD_ACTION_CLEAN_RECT_V2 = const(0x57)
 
 # Algorithms
-ALGORITHM_FACE_RECOGNITION = const(0)
-ALGORITHM_OBJECT_TRACKING = const(1)
-ALGORITHM_OBJECT_RECOGNITION = const(2)
-ALGORITHM_LINE_TRACKING = const(3)
-ALGORITHM_COLOR_RECOGNITION = const(4)
-ALGORITHM_TAG_RECOGNITION = const(5)
-ALGORITHM_OBJECT_CLASSIFICATION = const(6)
-ALGORITHM_QR_CODE_RECOGNITION = const(7)
-ALGORITHM_BARCODE_RECOGNITION = const(8)
+ALGORITHM_ANY = const(0) #:show touch screen menu
+ALGORITHM_FACE_RECOGNITION = const(1)
+ALGORITHM_OBJECT_TRACKING = const(2)
+ALGORITHM_OBJECT_RECOGNITION = const(3)
+ALGORITHM_LINE_TRACKING = const(4)
+ALGORITHM_COLOR_RECOGNITION = const(5)
+ALGORITHM_TAG_RECOGNITION = const(6)
+ALGORITHM_OBJECT_CLASSIFICATION = const(7)
+
 # V2 additional algorithms
+ALGORITHM_OCR = const(8)
+ALGORITHM_LICENSE_RECOGNITION = const(9)
+ALGORITHM_QR_CODE_RECOGNITION = const(10) # was 7 in V1
+ALGORITHM_BARCODE_RECOGNITION = const(11) # was 8 in V1
+ALGORITHM_FACE_EMOTION_RECOGNITION = const(12)
 ALGORITHM_POSE_RECOGNITION = const(13)
 ALGORITHM_HAND_RECOGNITION = const(14)
 
@@ -432,7 +437,9 @@ class HuskyLens:
             return True  # V2 doesn't need to resend
         
         if self.version == 1:
-            self._cmd_v1(CMD_REQUEST_ALGORITHM, struct.pack("h", algorithm))
+            # Between V1 and V2 the algorithm ids have increased by 1. Constants defined for V2.
+            # TODO: remap barcode and QR to v1 algos.
+            self._cmd_v1(CMD_REQUEST_ALGORITHM, struct.pack("h", algorithm+1))
             result = self._check_ok()
         else:  # V2
             content = bytearray([algorithm, 0])
@@ -780,8 +787,8 @@ if __name__ == "__main__":
         print("Step 6: Framerate test - Getting 20 blocks...")
         print("=" * 60 + "\n")
         
-        import gc
-        gc.collect()  # Free memory before test
+        hl.set_alg(1) # Face Recognition
+        time.sleep(5)
         
         start_time = time.ticks_ms()
         successful_reads = 0
@@ -790,6 +797,7 @@ if __name__ == "__main__":
         for i in range(20):
             blocks = hl.get_blocks()
             if blocks:
+                print(blocks)
                 successful_reads += 1
                 total_blocks += len(blocks)
         

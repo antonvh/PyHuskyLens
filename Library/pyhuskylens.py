@@ -1,36 +1,29 @@
 """
 HuskyLens Universal Driver for MicroPython
-Supports both V1 and V2 hardware with auto-detection
+Supports V1 and V2 hardware with I2C and Serial interfaces
 
-Memory optimization tips:
-1. Use gc.collect() after large operations
-2. Delete unused objects explicitly: del obj
-3. Use const() for all constants to save RAM
-4. Reuse Block/Arrow/Hand objects instead of creating new ones
-5. Call get() with specific filters to reduce object creation
-6. Pre-compile this module with mpy-cross
+Copyright (c) 2025 Antons Mindstorms
 """
 
 import struct
 import time
 from micropython import const
 from math import atan2, degrees
-from machine import Pin, SoftI2C
+
+# Demo constants when running as main
+EV3_PYBRICKS_SERIAL = const(0)
+INVENTOR_SERIAL = const(1)
+ESP32_I2C = const(3)
+MAIN_DEMO_TYPE = ESP32_I2C  # Change this to test different interfaces
 
 # Protocol headers
 HEADER_V1 = b"\x55\xaa\x11"
 HEADER_V2 = b"\x55\xaa"
 
-# V1 Commands (const for memory efficiency)
+# V1 Commands
 CMD_REQUEST = const(0x20)
-CMD_REQUEST_BLOCKS = const(0x21)
-CMD_REQUEST_ARROWS = const(0x22)
-CMD_REQUEST_LEARNED = const(0x23)
-CMD_REQUEST_BLOCKS_LEARNED = const(0x24)
-CMD_REQUEST_ARROWS_LEARNED = const(0x25)
 CMD_REQUEST_BY_ID = const(0x26)
-CMD_REQUEST_BLOCKS_BY_ID = const(0x27)
-CMD_REQUEST_ARROWS_BY_ID = const(0x28)
+CMD_REQUEST_LEARNED = const(0x23)
 CMD_RETURN_INFO = const(0x29)
 CMD_RETURN_BLOCK = const(0x2A)
 CMD_RETURN_ARROW = const(0x2B)
@@ -57,7 +50,7 @@ CMD_ACTION_DRAW_RECT_V2 = const(0x56)
 CMD_ACTION_CLEAN_RECT_V2 = const(0x57)
 
 # Algorithms
-ALGORITHM_ANY = const(0) #:show touch screen menu
+ALGORITHM_MENU = const(0)
 ALGORITHM_FACE_RECOGNITION = const(1)
 ALGORITHM_OBJECT_TRACKING = const(2)
 ALGORITHM_OBJECT_RECOGNITION = const(3)
@@ -65,108 +58,60 @@ ALGORITHM_LINE_TRACKING = const(4)
 ALGORITHM_COLOR_RECOGNITION = const(5)
 ALGORITHM_TAG_RECOGNITION = const(6)
 ALGORITHM_OBJECT_CLASSIFICATION = const(7)
-
-# V2 additional algorithms
 ALGORITHM_OCR = const(8)
 ALGORITHM_LICENSE_RECOGNITION = const(9)
-ALGORITHM_QR_CODE_RECOGNITION = const(10) # was 7 in V1
-ALGORITHM_BARCODE_RECOGNITION = const(11) # was 8 in V1
+ALGORITHM_QR_CODE_RECOGNITION = const(10)
+ALGORITHM_BARCODE_RECOGNITION = const(11)
 ALGORITHM_FACE_EMOTION_RECOGNITION = const(12)
 ALGORITHM_POSE_RECOGNITION = const(13)
 ALGORITHM_HAND_RECOGNITION = const(14)
 
-# Color IDs (0-9 for standard colors)
+# Colors
 COLOR_BLACK = const(0)
 COLOR_WHITE = const(1)
 COLOR_RED = const(2)
 COLOR_GREEN = const(3)
 COLOR_BLUE = const(4)
 COLOR_YELLOW = const(5)
-COLOR_CYAN = const(6)
-COLOR_MAGENTA = const(7)
-COLOR_ORANGE = const(8)
-COLOR_PURPLE = const(9)
+
+# I2C Register for V1
+I2C_REG_V1 = const(0x0C)
 
 
 class Arrow:
-    """Arrow detection result.
-    
-    Properties:
-        x_tail (int): X coordinate of arrow tail
-        y_tail (int): Y coordinate of arrow tail
-        x_head (int): X coordinate of arrow head
-        y_head (int): Y coordinate of arrow head
-        ID (int): Learned ID (0 if not learned)
-        learned (bool): True if this arrow has been learned
-        direction (float): Arrow direction in degrees (0=up, 90=left, 180=down, 270=right)
-        type (str): Always "ARROW"
-    """
-    
+    """Arrow detection result."""
     __slots__ = ('x_tail', 'y_tail', 'x_head', 'y_head', 'ID', 'learned', 'direction', 'type')
     
     def __init__(self, x_tail, y_tail, x_head, y_head, ID):
-        self.x_tail = x_tail
-        self.y_tail = y_tail
-        self.x_head = x_head
-        self.y_head = y_head
-        self.ID = ID
+        self.x_tail, self.y_tail, self.x_head, self.y_head, self.ID = x_tail, y_tail, x_head, y_head, ID
         self.learned = ID > 0
         self.direction = degrees(atan2(x_tail - x_head, y_tail - y_head))
         self.type = "ARROW"
 
     def __repr__(self):
-        return f"Arrow(tail=({self.x_tail},{self.y_tail}), head=({self.x_head},{self.y_head}), dir={self.direction:.1f}°, ID={self.ID})"
+        return "Arrow(tail=(" + str(self.x_tail) + "," + str(self.y_tail) + "), head=(" + str(self.x_head) + "," + str(self.y_head) + "), dir=" + str(self.direction) + ", ID=" + str(self.ID) + ")"
 
 
 class Block:
-    """Block detection result.
-    
-    Properties:
-        x (int): X coordinate of block center
-        y (int): Y coordinate of block center
-        width (int): Block width in pixels
-        height (int): Block height in pixels
-        ID (int): Learned ID (0 if not learned)
-        confidence (int): Detection confidence (0-255, V2 only)
-        name (str): Object name (V2 only, empty for V1)
-        content (str): Additional content (V2 only, empty for V1)
-        learned (bool): True if this block has been learned
-        type (str): Always "BLOCK"
-    """
-    
+    """Block detection result."""
     __slots__ = ('x', 'y', 'width', 'height', 'ID', 'confidence', 'name', 'content', 'learned', 'type')
     
     def __init__(self, x, y, width, height, ID, confidence=0, name="", content=""):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.ID = ID
-        self.confidence = confidence
-        self.name = name
-        self.content = content
+        self.x, self.y, self.width, self.height = x, y, width, height
+        self.ID, self.confidence, self.name, self.content = ID, confidence, name, content
         self.learned = ID > 0
         self.type = "BLOCK"
 
     def __repr__(self):
-        s = f"Block(x={self.x}, y={self.y}, w={self.width}, h={self.height}, ID={self.ID}"
-        if self.confidence: s += f", conf={self.confidence}"
-        if self.name: s += f", name='{self.name}'"
-        if self.content: s += f", content='{self.content}'"
+        s = "Block(x=" + str(self.x) + ", y=" + str(self.y) + ", w=" + str(self.width) + ", h=" + str(self.height) + ", ID=" + str(self.ID)
+        if self.confidence: s += ", conf=" + str(self.confidence)
+        if self.name: s += ", name='" + self.name + "'"
+        if self.content: s += ", content='" + self.content + "'"
         return s + ")"
 
 
 class Face:
-    """Face detection result with facial landmarks (V2 only).
-    
-    Inherits all Block properties plus:
-        leye_x, leye_y (int): Left eye coordinates
-        reye_x, reye_y (int): Right eye coordinates
-        nose_x, nose_y (int): Nose coordinates
-        lmouth_x, lmouth_y (int): Left mouth corner coordinates
-        rmouth_x, rmouth_y (int): Right mouth corner coordinates
-    """
-    
+    """Face with landmarks (V2 only)."""
     __slots__ = ('x', 'y', 'width', 'height', 'ID', 'confidence', 'name', 'content', 'learned', 'type',
                  'leye_x', 'leye_y', 'reye_x', 'reye_y', 'nose_x', 'nose_y',
                  'lmouth_x', 'lmouth_y', 'rmouth_x', 'rmouth_y')
@@ -176,7 +121,6 @@ class Face:
         self.ID, self.confidence, self.name, self.content = ID, confidence, name, content
         self.learned = ID > 0
         self.type = "FACE"
-        
         if len(landmarks) >= 10:
             self.leye_x, self.leye_y = landmarks[0], landmarks[1]
             self.reye_x, self.reye_y = landmarks[2], landmarks[3]
@@ -185,21 +129,11 @@ class Face:
             self.rmouth_x, self.rmouth_y = landmarks[8], landmarks[9]
 
     def __repr__(self):
-        return f"Face(x={self.x}, y={self.y}, ID={self.ID}, eyes=({self.leye_x},{self.leye_y}),({self.reye_x},{self.reye_y}))"
+        return "Face(x=" + str(self.x) + ", y=" + str(self.y) + ", ID=" + str(self.ID) + ")"
 
 
 class Hand:
-    """Hand detection result with 21 keypoints (V2 only).
-    
-    Inherits all Block properties plus 21 hand keypoints:
-        wrist_x, wrist_y (int): Wrist position
-        thumb_cmc_x/y, thumb_mcp_x/y, thumb_ip_x/y, thumb_tip_x/y (int): Thumb joints
-        index_finger_mcp_x/y, _pip_x/y, _dip_x/y, _tip_x/y (int): Index finger joints
-        middle_finger_mcp_x/y, _pip_x/y, _dip_x/y, _tip_x/y (int): Middle finger joints
-        ring_finger_mcp_x/y, _pip_x/y, _dip_x/y, _tip_x/y (int): Ring finger joints
-        pinky_finger_mcp_x/y, _pip_x/y, _dip_x/y, _tip_x/y (int): Pinky finger joints
-    """
-    
+    """Hand with 21 keypoints (V2 only)."""
     __slots__ = ('x', 'y', 'width', 'height', 'ID', 'confidence', 'name', 'content', 'learned', 'type',
                  'wrist_x', 'wrist_y', 'thumb_cmc_x', 'thumb_cmc_y', 'thumb_mcp_x', 'thumb_mcp_y',
                  'thumb_ip_x', 'thumb_ip_y', 'thumb_tip_x', 'thumb_tip_y',
@@ -217,7 +151,6 @@ class Hand:
         self.ID, self.confidence, self.name, self.content = ID, confidence, name, content
         self.learned = ID > 0
         self.type = "HAND"
-        
         if len(keypoints) >= 42:
             self.wrist_x, self.wrist_y = keypoints[0], keypoints[1]
             self.thumb_cmc_x, self.thumb_cmc_y = keypoints[2], keypoints[3]
@@ -242,24 +175,11 @@ class Hand:
             self.pinky_finger_tip_x, self.pinky_finger_tip_y = keypoints[40], keypoints[41]
 
     def __repr__(self):
-        return f"Hand(x={self.x}, y={self.y}, ID={self.ID}, wrist=({self.wrist_x},{self.wrist_y}))"
+        return "Hand(x=" + str(self.x) + ", y=" + str(self.y) + ", ID=" + str(self.ID) + ", wrist=(" + str(self.wrist_x) + "," + str(self.wrist_y) + "))"
 
 
 class Pose:
-    """Pose detection result with 17 body keypoints (V2 only).
-    
-    Inherits all Block properties plus 17 body keypoints:
-        nose_x, nose_y (int): Nose position
-        leye_x/y, reye_x/y (int): Left and right eye positions
-        lear_x/y, rear_x/y (int): Left and right ear positions
-        lshoulder_x/y, rshoulder_x/y (int): Left and right shoulder positions
-        lelbow_x/y, relbow_x/y (int): Left and right elbow positions
-        lwrist_x/y, rwrist_x/y (int): Left and right wrist positions
-        lhip_x/y, rhip_x/y (int): Left and right hip positions
-        lknee_x/y, rknee_x/y (int): Left and right knee positions
-        lankle_x/y, rankle_x/y (int): Left and right ankle positions
-    """
-    
+    """Pose with 17 body keypoints (V2 only)."""
     __slots__ = ('x', 'y', 'width', 'height', 'ID', 'confidence', 'name', 'content', 'learned', 'type',
                  'nose_x', 'nose_y', 'leye_x', 'leye_y', 'reye_x', 'reye_y',
                  'lear_x', 'lear_y', 'rear_x', 'rear_y',
@@ -275,7 +195,6 @@ class Pose:
         self.ID, self.confidence, self.name, self.content = ID, confidence, name, content
         self.learned = ID > 0
         self.type = "POSE"
-        
         if len(keypoints) >= 34:
             self.nose_x, self.nose_y = keypoints[0], keypoints[1]
             self.leye_x, self.leye_y = keypoints[2], keypoints[3]
@@ -296,94 +215,82 @@ class Pose:
             self.rankle_x, self.rankle_y = keypoints[32], keypoints[33]
 
     def __repr__(self):
-        return f"Pose(x={self.x}, y={self.y}, ID={self.ID}, nose=({self.nose_x},{self.nose_y}))"
+        return "Pose(x=" + str(self.x) + ", y=" + str(self.y) + ", ID=" + str(self.ID) + ", nose=(" + str(self.nose_x) + "," + str(self.nose_y) + "))"
 
 
-class HuskyLens:
-    """Universal HuskyLens driver with auto-detection for V1 and V2."""
+class HuskyLensBase:
+    """Base class with all HuskyLens logic."""
     
-    ADDR_V1 = const(0x32)
-    ADDR_V2 = const(0x50)
-    
-    def __init__(self, i2c, debug=False):
-        self.i2c = i2c
+    def __init__(self, debug=False):
         self.debug = debug
         self.version = None
-        self.address = None
         self.connected = False
         self.current_algorithm = ALGORITHM_OBJECT_RECOGNITION
-        self._detect_version()
+    
+    # Abstract methods for subclasses
+    def _transport_write(self, data):
+        raise NotImplementedError
+    
+    def _transport_read(self, size):
+        raise NotImplementedError
+    
+    def _transport_flush(self):
+        raise NotImplementedError
     
     def _detect_version(self):
-        # Auto-detect by scanning I2C
-        devices = self.i2c.scan()
-        if self.ADDR_V1 in devices:
-            self.version = 1
-            self.address = self.ADDR_V1
-        elif self.ADDR_V2 in devices:
-            self.version = 2
-            self.address = self.ADDR_V2
-        if self.debug and self.version:
-            print(f"HuskyLens V{self.version} @ 0x{self.address:02X}")
+        raise NotImplementedError
     
-    # Common utilities
+    # Utilities
     def _checksum(self, data):
-        return sum(bytearray(data)) & 0xFF
-    
-    def _flush(self):
-        # Flush I2C buffer - only when needed
-        try:
-            for _ in range(5):  # Reduced from 10
-                try:
-                    self.i2c.readfrom(self.address, 16)  # Reduced from 32
-                except:
-                    break
-        except:
-            pass
+        return sum(data) & 0xFF
     
     def _write(self, data):
-        # Write with version-specific wrapper
         try:
             if self.version == 2:
-                self._flush()  # Only flush for V2 before write
-            self.i2c.writeto(self.address, data)
-            time.sleep_ms(5)  # Reduced from 10ms
+                self._transport_flush()
+            self._transport_write(data)
+            time.sleep_ms(5)
         except Exception as e:
-            if self.debug: print(f"Write error: {e}")
+            if self.debug: 
+                print("Write error: " + str(e))
     
-    def _check_ok(self):
-        # Check for OK response (works for both V1 and V2)
-        return self.knock()
-    
-    # V1-specific protocol
-    def _cmd_v1(self, command, payload=b""):
-        length = bytes([len(payload)])
-        data = HEADER_V1 + length + bytes([command]) + payload
-        data += bytes([self._checksum(data)])
-        self._write(data)
+    # V1 protocol
+    def _cmd_v1(self, command, payload=None):
+        if payload is None:
+            payload = bytearray()
+        data = bytearray(HEADER_V1)
+        data.append(len(payload))
+        data.append(command)
+        data.extend(payload)
+        data.append(self._checksum(data))
+        self._write(bytes(data))
     
     def _read_v1(self):
-        # Read V1 packet
         try:
             for _ in range(50):
-                d = self.i2c.readfrom(self.address, 3)
-                if d == HEADER_V1:
+                if self._transport_read(3) == HEADER_V1:
                     break
             else:
                 return None, None
             
-            length = self.i2c.readfrom(self.address, 1)[0]
-            command = self.i2c.readfrom(self.address, 1)[0]
-            payload = self.i2c.readfrom(self.address, length) if length else b""
-            checksum = self.i2c.readfrom(self.address, 1)[0]
+            length = self._transport_read(1)[0]
+            command = self._transport_read(1)[0]
+            payload = self._transport_read(length) if length else bytearray()
+            checksum = self._transport_read(1)[0]
             
-            if checksum != self._checksum(HEADER_V1 + bytes([length, command]) + payload):
-                return None, None
-            return command, payload
-        except:
-            return None, None
+            expected = bytearray(HEADER_V1)
+            expected.append(length)
+            expected.append(command)
+            expected.extend(payload)
+            
+            if checksum == self._checksum(expected):
+                return command, payload
+        except Exception as e:
+            if self.debug:
+                print("Read V1 error: " + str(e))
+        return None, None
     
-    # V2-specific protocol
+    # V2 protocol
     def _cmd_v2(self, command, algorithm=0, content=None):
         packet = bytearray([0x55, 0xAA, command, algorithm, len(content) if content else 0])
         if content:
@@ -392,20 +299,19 @@ class HuskyLens:
         self._write(bytes(packet))
     
     def _read_v2(self):
-        # Read V2 packet
         try:
-            header = self.i2c.readfrom(self.address, 5)
-            if len(header) == 5 and header[0] == 0x55 and header[1] == 0xAA:
+            header = self._transport_read(5)
+            if len(header) == 5 and header[:2] == HEADER_V2:
                 size = header[4]
-                rest = self.i2c.readfrom(self.address, size + 1)
-                return header + rest
-        except:
-            pass
+                return header + self._transport_read(size + 1)
+        except Exception as e:
+            if self.debug:
+                print("Read V2 error: " + str(e))
         return None
     
     # Public API
     def knock(self):
-        """Test connection. Returns True if connected."""
+        """Test connection."""
         if self.version == 1:
             self._cmd_v1(CMD_REQUEST_KNOCK)
             for _ in range(10):
@@ -418,90 +324,71 @@ class HuskyLens:
             for _ in range(5):
                 try:
                     self._cmd_v2(CMD_KNOCK_V2)
-                    resp = self.i2c.readfrom(self.address, 6)
-                    if len(resp) >= 3 and resp[0] == 0x55 and resp[1] == 0xAA and resp[2] == CMD_RETURN_OK_V2:
+                    resp = self._transport_read(6)
+                    if len(resp) >= 3 and resp[:2] == HEADER_V2 and resp[2] == CMD_RETURN_OK_V2:
                         self.connected = True
                         return True
-                except:
-                    pass
+                except Exception as e:
+                    if self.debug:
+                        print("Knock V2 error: " + str(e))
                 time.sleep_ms(50)
         self.connected = False
         return False
     
     def set_alg(self, algorithm=None):
-        """Switch algorithm. If None, uses current_algorithm."""
+        """Switch algorithm."""
         if algorithm is None:
             algorithm = self.current_algorithm
-        
         if algorithm == self.current_algorithm and self.version == 2:
-            return True  # V2 doesn't need to resend
+            return True
         
         if self.version == 1:
-            # Between V1 and V2 the algorithm ids have increased by 1. Constants defined for V2.
-            # TODO: remap barcode and QR to v1 algos.
-            self._cmd_v1(CMD_REQUEST_ALGORITHM, struct.pack("h", algorithm+1))
-            result = self._check_ok()
+            # check algo available, and +1 for V1 indexing
+            if 0 < algorithm < 7:
+                algorithm -= 1
+            elif 10 <= algorithm <= 11:
+                algorithm -= 3
+            payload = bytearray(struct.pack("h", algorithm))
+            self._cmd_v1(CMD_REQUEST_ALGORITHM, payload)
         else:  # V2
             content = bytearray([algorithm, 0])
             content.extend(struct.pack('<hhhh', 0, 0, 0, 0))
             self._cmd_v2(CMD_SET_ALGORITHM_V2, 0, content)
-            result = self._check_ok()
         
+        result = self.knock()
         if result:
             self.current_algorithm = algorithm
         return result
     
     def set_multi_alg(self, *algorithms):
-        """Set multiple algorithms (V2 only). Pass 2-5 algorithm constants."""
-        if self.version != 2:
-            if self.debug: print("Multi-algorithm only on V2")
+        """Set multiple algorithms (V2 only)."""
+        if self.version != 2 or len(algorithms) < 2 or len(algorithms) > 5:
             return False
         
-        algos = [a for a in algorithms if a is not None]
-        if len(algos) < 2 or len(algos) > 5:
-            if self.debug: print("Need 2-5 algorithms")
-            return False
-        
-        content = bytearray([len(algos), 0])
-        for i in range(max(4, len(algos))):
-            content.extend(struct.pack('<h', algos[i] if i < len(algos) else 0))
+        content = bytearray([len(algorithms), 0])
+        for i in range(4):
+            content.extend(struct.pack('<h', algorithms[i] if i < len(algorithms) else 0))
         
         self._cmd_v2(CMD_SET_MULTI_ALGORITHM_V2, 0, content)
-        return self._check_ok()
-    
-    def set_multi_alg_ratio(self, *ratios):
-        """Set multi-algorithm ratios (V2 only). Pass 2-5 ratio values."""
-        if self.version != 2:
-            return False
-        
-        r = [x for x in ratios if x >= 0]
-        if len(r) < 2:
-            return False
-        
-        content = bytearray([len(r), 0])
-        for i in range(max(4, len(r))):
-            content.extend(struct.pack('<h', r[i] if i < len(r) else 0))
-        
-        self._cmd_v2(CMD_SET_MULTI_ALGORITHM_RATIO_V2, 0, content)
-        return self._check_ok()
+        return self.knock()
     
     def get_version(self):
-        """Get firmware version string."""
-        if self.version == 1:
-            self._cmd_v1(CMD_REQUEST_FIRMWARE_VERSION)
-            cmd, payload = self._read_v1()
-            if payload:
-                try:
-                    return payload.decode('utf-8')
-                except:
-                    return str(payload)
+        """Get firmware version (V1 only)."""
+        if self.version != 1:
             return None
-        else:  # V2
-            if self.debug: print("get_version not implemented for V2")
-            return None
+        self._cmd_v1(CMD_REQUEST_FIRMWARE_VERSION)
+        cmd, payload = self._read_v1()
+        if payload:
+            try:
+                return payload.decode('utf-8')
+            except Exception as e:
+                if self.debug:
+                    print("Version decode error: " + str(e))
+                return str(payload)
+        return None
     
     def get(self, algorithm=None, ID=None, learned=False):
-        """Get all blocks and arrows. Returns {'blocks': [...], 'arrows': [...]}"""
+        """Get all blocks and arrows."""
         if algorithm is None:
             algorithm = self.current_algorithm
         
@@ -509,7 +396,8 @@ class HuskyLens:
         
         if self.version == 1:
             if ID is not None:
-                self._cmd_v1(CMD_REQUEST_BY_ID, struct.pack("h", ID))
+                payload = bytearray(struct.pack("h", ID))
+                self._cmd_v1(CMD_REQUEST_BY_ID, payload)
             elif learned:
                 self._cmd_v1(CMD_REQUEST_LEARNED)
             else:
@@ -518,41 +406,48 @@ class HuskyLens:
             cmd, info = self._read_v1()
             if cmd == CMD_RETURN_INFO:
                 try:
-                    n_objs = struct.unpack("h", info[:2])[0]
-                except:
+                    n_objs = struct.unpack("h", info[:2])[0] if info else 0
+                except Exception as e:
+                    if self.debug:
+                        print("Info parse error: " + str(e))
                     n_objs = 0
                 
                 for _ in range(n_objs):
                     cmd, data = self._read_v1()
-                    if cmd == CMD_RETURN_BLOCK:
-                        blocks.append(Block(*struct.unpack("hhhhh", data)))
-                    elif cmd == CMD_RETURN_ARROW:
-                        arrows.append(Arrow(*struct.unpack("hhhhh", data)))
+                    try:
+                        if cmd == CMD_RETURN_BLOCK:
+                            blocks.append(Block(*struct.unpack("hhhhh", data)))
+                        elif cmd == CMD_RETURN_ARROW:
+                            arrows.append(Arrow(*struct.unpack("hhhhh", data)))
+                    except Exception as e:
+                        if self.debug:
+                            print("Object parse error: " + str(e))
         
         else:  # V2
-            self._flush()
             self._cmd_v2(CMD_GET_RESULT_V2, algorithm)
-            time.sleep_ms(50)  # Reduced from 100ms
+            time.sleep_ms(50)
             
             info = self._read_v2()
             if info and info[2] == CMD_RETURN_INFO_V2:
-                n_results = struct.unpack('<h', info[7:9])[0]
+                try:
+                    n_results = struct.unpack('<h', info[7:9])[0]
+                except Exception as e:
+                    if self.debug:
+                        print("V2 info parse error: " + str(e))
+                    n_results = 0
                 
                 for _ in range(n_results):
-                    time.sleep_ms(10)  # Reduced from 50ms
+                    time.sleep_ms(10)
                     pkt = self._read_v2()
-                    if not pkt:
-                        continue
-                    
-                    obj = self._parse_v2(pkt, algorithm)
-                    if obj:
-                        if obj.type in ("BLOCK", "FACE", "HAND", "POSE"):
-                            blocks.append(obj)
-                        elif obj.type == "ARROW":
-                            arrows.append(obj)
+                    if pkt:
+                        obj = self._parse_v2(pkt, algorithm)
+                        if obj:
+                            if obj.type in ("BLOCK", "FACE", "HAND", "POSE"):
+                                blocks.append(obj)
+                            elif obj.type == "ARROW":
+                                arrows.append(obj)
             
-            # Only flush at the end
-            self._flush()
+            self._transport_flush()
         
         # Apply filters
         if ID is not None:
@@ -573,120 +468,87 @@ class HuskyLens:
         return self.get(algorithm, ID, learned)['arrows']
     
     def _parse_v2(self, data, algorithm):
-        # Parse V2 result packet with algorithm-specific handling
-        # Packet structure from Result.cpp:
-        # [0:2] Header (0x55 0xAA)
-        # [2] Command (0x43=BLOCK, 0x44=ARROW)
-        # [3] Algorithm ID
-        # [4] Content size
-        # [5] ID (int8)
-        # [6] Level/Confidence (int8)
-        # [7:9] First/xCenter (int16 little-endian)
-        # [9:11] Second/yCenter (int16 little-endian)
-        # [11:13] Third/width (int16 little-endian)
-        # [13:15] Fourth/height (int16 little-endian)
-        # [15+] Payload: String_t structures and extended data
-        
+        """Parse V2 result packet."""
         if len(data) < 15:
             return None
         
-        cmd = data[2]
-        size = data[4]
+        cmd, size = data[2], data[4]
         if size < 10:
             return None
         
-        # Parse basic PacketData_t structure
-        ID = struct.unpack('b', data[5:6])[0]
-        conf = struct.unpack('b', data[6:7])[0]
-        x = struct.unpack('<h', data[7:9])[0]
-        y = struct.unpack('<h', data[9:11])[0]
-        w = struct.unpack('<h', data[11:13])[0]
-        h = struct.unpack('<h', data[13:15])[0]
+        try:
+            ID, conf = struct.unpack('bb', bytes(data[5:7]))
+            x, y, w, h = struct.unpack('<hhhh', bytes(data[7:15]))
+        except Exception as e:
+            if self.debug:
+                print("V2 header parse error: " + str(e))
+            return None
         
-        # Parse payload: String_t for name and content
-        # String_t structure: uint8_t length, followed by data
-        name, content = "", ""
-        offset = 15
-        
-        # Check if we have string data
+        # Parse strings
+        name, content, offset = "", "", 15
         if size > 10 and len(data) > offset:
             try:
-                # First String_t: name
                 name_len = data[offset]
                 offset += 1
                 if name_len > 0 and len(data) >= offset + name_len:
-                    try:
-                        name = data[offset:offset+name_len].decode('utf-8')
-                    except:
-                        name = str(data[offset:offset+name_len])  # Fallback for bad UTF-8
+                    name = bytes(data[offset:offset+name_len]).decode('utf-8')
                     offset += name_len
                 
-                # Second String_t: content
                 if len(data) > offset:
                     content_len = data[offset]
                     offset += 1
                     if content_len > 0 and len(data) >= offset + content_len:
-                        try:
-                            content = data[offset:offset+content_len].decode('utf-8')
-                        except:
-                            content = str(data[offset:offset+content_len])  # Fallback
+                        content = bytes(data[offset:offset+content_len]).decode('utf-8')
                         offset += content_len
             except Exception as e:
-                if self.debug: print(f"String parse error: {e}")
+                if self.debug:
+                    print("String parse error: " + str(e))
         
-        # Parse extended keypoints for special algorithms (after strings)
+        # Parse keypoints
         keypoints = []
-        if len(data) > offset + 1:  # +1 for checksum
+        if len(data) > offset + 1:
             try:
-                remaining = (len(data) - offset - 1) // 2  # -1 for checksum, //2 for int16s
-                for i in range(remaining):
+                for i in range((len(data) - offset - 1) // 2):
                     if offset + 2 <= len(data) - 1:
-                        kp = struct.unpack('<h', data[offset:offset+2])[0]
-                        keypoints.append(kp)
+                        keypoints.append(struct.unpack('<h', bytes(data[offset:offset+2]))[0])
                         offset += 2
             except Exception as e:
-                if self.debug: print(f"Keypoint parse error: {e}")
+                if self.debug:
+                    print("Keypoint parse error: " + str(e))
         
-        # Return appropriate class based on algorithm
-        if cmd == CMD_RETURN_BLOCK_V2:
-            if algorithm == ALGORITHM_FACE_RECOGNITION and keypoints:
-                return Face(x, y, w, h, ID, conf, name, content, keypoints)
-            elif algorithm == ALGORITHM_HAND_RECOGNITION and keypoints:
-                return Hand(x, y, w, h, ID, conf, name, content, keypoints)
-            elif algorithm == ALGORITHM_POSE_RECOGNITION and keypoints:
-                return Pose(x, y, w, h, ID, conf, name, content, keypoints)
-            else:
-                return Block(x, y, w, h, ID, conf, name, content)
-        elif cmd == CMD_RETURN_ARROW_V2:
-            return Arrow(x, y, w, h, ID)
+        # Return appropriate class
+        try:
+            if cmd == CMD_RETURN_BLOCK_V2:
+                if algorithm == ALGORITHM_FACE_RECOGNITION and keypoints:
+                    return Face(x, y, w, h, ID, conf, name, content, keypoints)
+                elif algorithm == ALGORITHM_HAND_RECOGNITION and keypoints:
+                    return Hand(x, y, w, h, ID, conf, name, content, keypoints)
+                elif algorithm == ALGORITHM_POSE_RECOGNITION and keypoints:
+                    return Pose(x, y, w, h, ID, conf, name, content, keypoints)
+                else:
+                    return Block(x, y, w, h, ID, conf, name, content)
+            elif cmd == CMD_RETURN_ARROW_V2:
+                return Arrow(x, y, w, h, ID)
+        except Exception as e:
+            if self.debug:
+                print("Object creation error: " + str(e))
         
         return None
     
     def draw_text(self, text, x=10, y=10, color=COLOR_WHITE):
         """Draw text on screen."""
         if self.version == 1:
-            params = bytearray(len(text) + 4)
-            params[0] = len(text)
-            params[1] = 0 if x <= 255 else 0xFF
-            params[2] = x % 255
-            params[3] = y
-            try:
-                params[4:] = text.encode('utf-8')
-            except:
-                params[4:] = text.encode()
+            params = bytearray([len(text), 0 if x <= 255 else 0xFF, x % 255, y])
+            params.extend(text.encode('utf-8'))
             self._cmd_v1(CMD_REQUEST_CUSTOM_TEXT, params)
-            return self._check_ok()
         else:  # V2
             content = bytearray([color, 0])
             content.extend(struct.pack('<hhhh', x, y, 0, 0))
-            try:
-                txt = text.encode('utf-8')
-            except:
-                txt = text.encode()
+            txt = text.encode('utf-8')
             content.append(len(txt))
             content.extend(txt)
             self._cmd_v2(CMD_ACTION_DRAW_TEXT_V2, 0, content)
-            return self._check_ok()
+        return self.knock()
     
     def clear_text(self):
         """Clear text from screen."""
@@ -694,7 +556,7 @@ class HuskyLens:
             self._cmd_v1(CMD_REQUEST_CLEAR_TEXT)
         else:
             self._cmd_v2(CMD_ACTION_CLEAR_TEXT_V2, 0)
-        return self._check_ok()
+        return self.knock()
     
     def draw_rect(self, x1, y1, x2, y2, color=COLOR_WHITE):
         """Draw rectangle (V2 only)."""
@@ -703,115 +565,210 @@ class HuskyLens:
         content = bytearray([color, 0])
         content.extend(struct.pack('<hhhh', x1, y1, x2, y2))
         self._cmd_v2(CMD_ACTION_DRAW_RECT_V2, 0, content)
-        return self._check_ok()
+        return self.knock()
     
     def clear_rect(self):
         """Clear rectangles (V2 only)."""
         if self.version != 2:
             return False
         self._cmd_v2(CMD_ACTION_CLEAN_RECT_V2, 0)
-        return self._check_ok()
+        return self.knock()
 
 
-# Demo program
+class HuskyLensI2C(HuskyLensBase):
+    """HuskyLens I2C driver."""
+    
+    ADDR_V1 = const(0x32)
+    ADDR_V2 = const(0x50)
+    
+    def __init__(self, i2c, debug=False):
+        super().__init__(debug)
+        self.i2c = i2c
+        self.address = None
+        self.use_register = False
+        self._detect_version()
+    
+    def _detect_version(self):
+        devices = self.i2c.scan()
+        if self.ADDR_V1 in devices:
+            self.version, self.address = 1, self.ADDR_V1
+        elif self.ADDR_V2 in devices:
+            self.version, self.address = 2, self.ADDR_V2
+        if self.debug and self.version:
+            print("HuskyLens V" + str(self.version) + " @ 0x" + hex(self.address)[2:])
+    
+    def _transport_write(self, data):
+        if self.version == 1:
+            # V1: Write to register 0x0C
+            self.i2c.writeto_mem(self.address, I2C_REG_V1, data)
+        else:
+            # V2: Direct write
+            self.i2c.writeto(self.address, data)
+    
+    def _transport_read(self, size):
+        if self.version == 1:
+            # V1: Read from register 0x0C
+            return self.i2c.readfrom_mem(self.address, I2C_REG_V1, size)
+        else:
+            # V2: Direct read
+            return self.i2c.readfrom(self.address, size)
+    
+    def _transport_flush(self):
+        # Only V2 needs flushing
+        if self.version == 2:
+            for _ in range(5):
+                self.i2c.readfrom(self.address, 16)
+
+
+class HuskyLensSerial(HuskyLensBase):
+    """HuskyLens Serial/UART driver."""
+    
+    def __init__(self, uart, debug=False):
+        super().__init__(debug)
+        self.uart = uart
+        # Abstract waiting method
+        if hasattr(uart, 'waiting'):
+            self._has_data = lambda: uart.waiting()
+        elif hasattr(uart, 'any'):
+            self._has_data = lambda: uart.any()
+        else:
+            self._has_data = lambda: True  # Fallback: always try to read
+        self._detect_version()
+    
+    def _detect_version(self):
+        # Try V2 first
+        self.version = 2
+        if self.knock():
+            if self.debug: print("HuskyLens V2 (UART)")
+            return
+        # Try V1
+        self.version = 1
+        if self.knock():
+            if self.debug: print("HuskyLens V1 (UART)")
+            return
+        self.version = None
+        if self.debug: print("No HuskyLens on UART")
+    
+    def _transport_write(self, data):
+        self.uart.write(data)
+    
+    def _transport_read(self, size):
+        """Read with pybricks/ev3dev compatibility."""
+        data = bytearray()
+        for _ in range(150):
+            if self._has_data():
+                chunk = self.uart.read(1)
+                if chunk:
+                    data.extend(chunk)
+            if len(data) >= size:
+                return bytes(data[:size])
+            time.sleep_ms(1)
+        return bytes(data)
+    
+    def _transport_flush(self):
+        """Flush with pybricks/ev3dev compatibility."""
+        try:
+            for _ in range(10):
+                if self._has_data():
+                    amount = self._has_data() if callable(self._has_data()) else 64
+                    if isinstance(amount, bool):
+                        amount = 64
+                    self.uart.read(min(amount, 64))
+                else:
+                    break
+        except Exception as e:
+            if self.debug:
+                print("Flush error: " + str(e))
+
+
+# Demo
 if __name__ == "__main__":
-    print("=" * 60)
-    print("HuskyLens Demo - Connect, Version, Text, Detection")
-    print("=" * 60)
-    
-    # Initialize I2C
-    i2c = SoftI2C(scl=Pin(22), sda=Pin(21), freq=100000)
-    hl = HuskyLens(i2c, debug=True)
-    
-    if not hl.version:
-        print("\n✗ No HuskyLens found!")
-        print(f"I2C devices: {[hex(d) for d in i2c.scan()]}")
-    else:
-        print(f"\n✓ Found HuskyLens V{hl.version}\n")
+    if MAIN_DEMO_TYPE == ESP32_I2C:
+        from machine import Pin, SoftI2C
         
-        # Step 1: Knock (connect)
-        print("Step 1: Testing connection...")
-        if hl.knock():
-            print("✓ Connected!\n")
-        else:
-            print("✗ Connection failed!")
-            raise SystemExit
-        
-        # Step 2: Get firmware version
-        print("Step 2: Getting firmware version...")
-        version = hl.get_version()
-        if version:
-            print(f"✓ Firmware: {version}\n")
-        else:
-            print("✗ Could not get version (may not be supported)\n")
-        
-        # Step 3: Write "Hello" on screen
-        print("Step 3: Writing 'Hello' to screen...")
-        if hl.draw_text("Hello", x=50, y=50, color=COLOR_GREEN):
-            print("✓ Text displayed!\n")
-            time.sleep(2)
-            hl.clear_text()
-        else:
-            print("✗ Text display failed\n")
-        
-        # Step 4: Set algorithm to Object Recognition
-        print("Step 4: Setting algorithm to Object Recognition...")
-        if hl.set_alg(ALGORITHM_OBJECT_RECOGNITION):
-            print("✓ Algorithm set!\n")
-        else:
-            print("✗ Algorithm switch failed\n")
-        
-        # Step 5: Get object detection results
-        print("Step 5: Getting object recognition results...")
-        blocks = hl.get_blocks()
-        
-        if blocks:
-            print(f"✓ Found {len(blocks)} object(s):\n")
-            for i, block in enumerate(blocks, 1):
-                print(f"  Object {i}:")
-                print(f"    Position: ({block.x}, {block.y})")
-                print(f"    Size: {block.width}×{block.height}")
-                print(f"    ID: {block.ID} {'(learned)' if block.learned else '(not learned)'}")
-                if hl.version == 2:
-                    print(f"    Confidence: {block.confidence}")
-                    if block.name:
-                        print(f"    Name: {block.name}")
-                    if block.content:
-                        print(f"    Content: {block.content}")
-                print()
-        else:
-            print("✗ No objects detected")
-        
-        # Step 6: Framerate test - Get 20 blocks as fast as possible
-        print("\n" + "=" * 60)
-        print("Step 6: Framerate test - Getting 20 blocks...")
-        print("=" * 60 + "\n")
-        
-        hl.set_alg(1) # Face Recognition
-        time.sleep(5)
-        
-        start_time = time.ticks_ms()
-        successful_reads = 0
-        total_blocks = 0
-        
-        for i in range(20):
-            blocks = hl.get_blocks()
-            if blocks:
-                print(blocks)
-                successful_reads += 1
-                total_blocks += len(blocks)
-        
-        elapsed = time.ticks_diff(time.ticks_ms(), start_time)
-        fps = 20000 / elapsed if elapsed > 0 else 0
-        
-        print(f"Results:")
-        print(f"  Total time: {elapsed}ms")
-        print(f"  Average per read: {elapsed/20:.1f}ms")
-        print(f"  Framerate: {fps:.1f} FPS")
-        print(f"  Successful reads: {successful_reads}/20")
-        print(f"  Total blocks detected: {total_blocks}")
-        print(f"  Avg blocks per read: {total_blocks/successful_reads:.1f}" if successful_reads > 0 else "")
-        
-        print("\n" + "=" * 60)
-        print("Demo complete!")
         print("=" * 60)
+        print("HuskyLens Demo - I2C and Serial")
+        print("=" * 60)
+        
+        # I2C Example
+        print("\n--- I2C Example ---")
+        i2c = SoftI2C(scl=Pin(22), sda=Pin(21), freq=100000)
+        hl_i2c = HuskyLensI2C(i2c, debug=True)
+        
+        if not hl_i2c.version:
+            print("X No HuskyLens found on I2C, scl=Pin(22), sda=Pin(21)")
+            devices = i2c.scan()
+            print("I2C devices: " + str([hex(d) for d in devices]))
+        else:
+            print("V Found HuskyLens V" + str(hl_i2c.version) + " on I2C\n")
+            
+            # Test connection
+            print("Testing connection...")
+            if hl_i2c.knock():
+                print("V I2C Connected!")
+                
+                # Get version (V1 only)
+                if hl_i2c.version == 1:
+                    version = hl_i2c.get_version()
+                    if version:
+                        print("V Firmware: " + str(version))
+
+                # Draw text
+                print("\nDrawing text...")
+                hl_i2c.set_alg(0)
+                hl_i2c.draw_text("Hello!", 50, 50, COLOR_GREEN)
+                print("V Text demo complete")
+                
+                # Set algorithm and get blocks
+                print("\nSetting algorithm to Object Recognition...")
+                hl_i2c.set_alg(ALGORITHM_OBJECT_RECOGNITION)
+                time.sleep(2)
+                print("Getting blocks...")
+                for i in range(20):
+                    blocks = hl_i2c.get_blocks()
+                    print("V Found " + str(len(blocks)) + " blocks")
+                    for block in blocks:
+                        print("  " + str(block))
+            else:
+                print("X Connection failed!")
+    
+    if MAIN_DEMO_TYPE == EV3_PYBRICKS_SERIAL or MAIN_DEMO_TYPE == INVENTOR_SERIAL:
+        if MAIN_DEMO_TYPE == EV3_PYBRICKS_SERIAL:
+            print("\n--- Serial Example Ev3dev Pybricks ---")
+            from pybricks.iodevices import UARTDevice
+            from pybricks.parameters import Port
+            uart = UARTDevice(Port.A, 9600)
+                
+        elif MAIN_DEMO_TYPE == INVENTOR_SERIAL:
+            print("\n--- Serial Example LEGO Inventor and SPIKE LEGACY---")
+            from hub import port
+            uart = port.A
+            uart.mode(1)
+            time.sleep_ms(300)
+            uart.baud(9600)
+            # Put voltage on M+ or M- leads
+            uart.pwm(100)
+            time.sleep_ms(2200)  # Give the huskylens some time to boot
+            time.sleep_ms(300)
+            uart.read(32)
+            
+        hl_serial = HuskyLensSerial(uart, debug=True)
+            
+        if hl_serial.version:
+            print("V Found HuskyLens V" + str(hl_serial.version) + " on Serial\n")
+            
+            if hl_serial.knock():
+                print("V Serial Connected!")
+                
+                # Get arrows
+                hl_serial.set_alg(ALGORITHM_LINE_TRACKING)
+                arrows = hl_serial.get_arrows()
+                print("V Found " + str(len(arrows)) + " arrows")
+                for arrow in arrows:
+                    print("  " + str(arrow))
+        else:
+            print("X No HuskyLens on Serial")
+    
+    print("\n" + "=" * 60)
+    print("Demo complete!")
+    print("=" * 60)

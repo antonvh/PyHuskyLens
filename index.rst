@@ -47,7 +47,6 @@ PyHuskyLens API
 ---------------
 
 .. autodata:: pyhuskylens
-    :members:
 
 .. automodule:: pyhuskylens
     :members:

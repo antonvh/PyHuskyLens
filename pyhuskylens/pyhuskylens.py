@@ -6,7 +6,6 @@ Copyright (c) 2025 Antons Mindstorms
 """
 
 import struct
-import time
 from math import atan2, degrees
 
 try:
@@ -15,7 +14,8 @@ try:
     from time import sleep_ms
 except ImportError:
     native = lambda f: f  # Fallback for CPython
-
+    
+    import time
     def sleep_ms(ms):
         time.sleep(ms / 1000.0)
 
@@ -537,7 +537,7 @@ class HuskyLensBase:
             if self.version == 2:
                 self._transport_flush()
             self._transport_write(data)
-            time.sleep_ms(_DELAY_AFTER_WRITE)
+            sleep_ms(_DELAY_AFTER_WRITE)
         except Exception as e:
             if self.debug:
                 print("Write error: " + str(e))
@@ -619,7 +619,7 @@ class HuskyLensBase:
                 if cmd == _CMD_RETURN_OK:
                     self.connected = True
                     return True
-                time.sleep_ms(_DELAY_KNOCK_RETRY)
+                sleep_ms(_DELAY_KNOCK_RETRY)
         else:  # V2
             for _ in range(5):
                 try:
@@ -635,7 +635,7 @@ class HuskyLensBase:
                 except Exception as e:
                     if self.debug:
                         print("Knock V2 error: " + str(e))
-                time.sleep_ms(_DELAY_KNOCK_RETRY_V2)
+                sleep_ms(_DELAY_KNOCK_RETRY_V2)
         self.connected = False
         return False
 
@@ -743,7 +743,7 @@ class HuskyLensBase:
 
         else:  # V2
             self._cmd_v2(_CMD_GET_RESULT_V2, algorithm)
-            time.sleep_ms(_DELAY_V2_INITIAL)
+            sleep_ms(_DELAY_V2_INITIAL)
 
             info = self._read_v2()
             if info and info[2] == _CMD_RETURN_INFO_V2:
@@ -755,7 +755,7 @@ class HuskyLensBase:
                     n_results = 0
 
                 for _ in range(n_results):
-                    time.sleep_ms(_DELAY_V2_BETWEEN)
+                    sleep_ms(_DELAY_V2_BETWEEN)
                     pkt = self._read_v2()
                     if pkt:
                         obj = self._parse_v2(pkt, algorithm)
@@ -1008,7 +1008,7 @@ class HuskyLensSerial(HuskyLensBase):
                     data.extend(chunk)
             if len(data) >= size:
                 return bytes(data[:size])
-            time.sleep_ms(_DELAY_SERIAL_READ)
+            sleep_ms(_DELAY_SERIAL_READ)
         return bytes(data)
 
     def _transport_flush(self):
@@ -1165,7 +1165,7 @@ class HuskyLensSerial_RPi(HuskyLensBase):
                     data.extend(chunk)
             if len(data) >= size:
                 return bytes(data[:size])
-            time.sleep_ms(_DELAY_SERIAL_READ)
+            sleep_ms(_DELAY_SERIAL_READ)
         return bytes(data)
 
     def _transport_flush(self):
@@ -1238,11 +1238,11 @@ def HuskyLens(port_or_i2c, baud=9600, debug=False, **kwargs):
 
             uart = getattr(port, port_or_i2c)
             uart.mode(1)
-            time.sleep_ms(300)
+            sleep_ms(300)
             uart.baud(baud)
             uart.pwm(100)  # Power the device
-            time.sleep_ms(2200)  # Boot time
-            time.sleep_ms(300)
+            sleep_ms(2200)  # Boot time
+            sleep_ms(300)
             if hasattr(uart, "read"):
                 uart.read(32)  # Flush
             return HuskyLensSerial(uart, debug=debug)
@@ -1310,7 +1310,7 @@ if __name__ == "__main__":
                 # Set algorithm and get blocks
                 print("\nSetting algorithm to Object Recognition...")
                 hl_i2c.set_alg(ALGORITHM_OBJECT_RECOGNITION)
-                time.sleep(2)
+                sleep_ms(2000)
                 print("Getting blocks...")
                 for i in range(20):
                     blocks = hl_i2c.get_blocks()
@@ -1334,12 +1334,12 @@ if __name__ == "__main__":
 
             uart = port.A
             uart.mode(1)
-            time.sleep_ms(300)
+            sleep_ms(300)
             uart.baud(9600)
             # Put voltage on M+ or M- leads
             uart.pwm(100)
-            time.sleep_ms(2200)  # Give the huskylens some time to boot
-            time.sleep_ms(300)
+            sleep_ms(2200)  # Give the huskylens some time to boot
+            sleep_ms(300)
             uart.read(32)
 
         hl_serial = HuskyLensSerial(uart, debug=True)

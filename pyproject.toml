@@ -1,3 +1,54 @@
+[project]
+name = "pyhuskylens"
+version = "2.1.0"
+description = "Universal Python library for HuskyLens AI camera - supports MicroPython and CPython (Raspberry Pi)"
+authors = [
+    {name = "Anton Vanhoucke", email = "anton@antonsmindstorms.com"}
+]
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.7"
+keywords = ["huskylens", "ai", "camera", "micropython", "raspberry-pi", "lego", "robotics", "vision", "i2c", "serial"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: MicroPython",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Hardware",
+]
+
+[project.urls]
+Homepage = "https://github.com/antonvh/PyHuskyLens"
+Documentation = "https://github.com/antonvh/PyHuskyLens/blob/master/README.md"
+Repository = "https://github.com/antonvh/PyHuskyLens"
+Issues = "https://github.com/antonvh/PyHuskyLens/issues"
+
+[project.optional-dependencies]
+i2c = ["smbus2>=0.4.0"]
+serial = ["pyserial>=3.5"]
+all = ["smbus2>=0.4.0", "pyserial>=3.5"]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyhuskylens*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

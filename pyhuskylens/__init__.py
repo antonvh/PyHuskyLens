@@ -9,11 +9,14 @@ from .pyhuskylens import (
     HuskyLensBase,
     HuskyLensI2C,
     HuskyLensSerial,
-    
+    HuskyLensI2C_RPi,
+    HuskyLensSerial_RPi,
     # Data classes
     Arrow,
     Block,
-    
+    Face,
+    Hand,
+    Pose,
     # Algorithms
     ALGORITHM_MENU,
     ALGORITHM_FACE_RECOGNITION,
@@ -30,7 +33,6 @@ from .pyhuskylens import (
     ALGORITHM_FACE_EMOTION_RECOGNITION,
     ALGORITHM_POSE_RECOGNITION,
     ALGORITHM_HAND_RECOGNITION,
-    
     # Colors
     COLOR_BLACK,
     COLOR_WHITE,
@@ -38,7 +40,6 @@ from .pyhuskylens import (
     COLOR_GREEN,
     COLOR_BLUE,
     COLOR_YELLOW,
-    
     # Result dict keys
     BLOCKS,
     ARROWS,
@@ -46,19 +47,23 @@ from .pyhuskylens import (
     FACES,
     HANDS,
     POSES,
-    
     # Utilities
     clamp_int,
 )
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __all__ = [
     "HuskyLens",
     "HuskyLensBase",
     "HuskyLensI2C",
     "HuskyLensSerial",
+    "HuskyLensI2C_RPi",
+    "HuskyLensSerial_RPi",
     "Arrow",
     "Block",
+    "Face",
+    "Hand",
+    "Pose",
     "ALGORITHM_MENU",
     "ALGORITHM_FACE_RECOGNITION",
     "ALGORITHM_OBJECT_TRACKING",

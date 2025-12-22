@@ -4,9 +4,11 @@
 # PyHuskyLens
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/pyhuskylens.svg)](https://pypi.org/project/pyhuskylens/)
+[![Python](https://img.shields.io/pypi/pyversions/pyhuskylens.svg)](https://pypi.org/project/pyhuskylens/)
 [![MicroPython](https://img.shields.io/badge/MicroPython-compatible-orange.svg)](https://micropython.org/)
 
-A universal MicroPython library for connecting the HuskyLens AI camera to robotics platforms. Supports both V1 and V2 hardware with I2C and Serial (UART) interfaces. Perfect for LEGO robotics, ESP32 projects, and any MicroPython-enabled device.
+A universal Python library for connecting the HuskyLens AI camera to robotics platforms. Supports both V1 and V2 hardware with I2C and Serial (UART) interfaces. Works with MicroPython (LEGO, ESP32) and CPython (Raspberry Pi). Perfect for LEGO robotics, ESP32 projects, Raspberry Pi vision systems, and any Python-enabled device.
 
 </div>
 
@@ -27,12 +29,14 @@ A universal MicroPython library for connecting the HuskyLens AI camera to roboti
 
 - 🤖 **Auto-detection**: Automatically detects HuskyLens V1 or V2 hardware
 - 🔌 **Dual Interface**: Supports both I2C and Serial (UART) communication
+- 🐍 **Dual Platform**: Works with MicroPython and CPython (Raspberry Pi)
+- 🍓 **Raspberry Pi Compatible**: Native support for Raspberry Pi I2C and Serial
 - 🎯 **Full Algorithm Support**: All 14 AI algorithms including face recognition, object tracking, pose detection, hand recognition, and more
 - 🦾 **Extended Detection**: Full V2 support with facial landmarks, 21-point hand keypoints, and 17-point body pose
 - 💾 **Memory Optimized**: Efficient bytearrays and data structures for MicroPython
 - 🔄 **Backward Compatible**: Unified `HuskyLens()` constructor works with all platforms
 - 🧩 **Clean Architecture**: Base class pattern with separate I2C and Serial implementations
-- 📦 **Platform Agnostic**: Works with pybricks-micropython, standard MicroPython, SPIKE, and Robot Inventor
+- 📦 **Platform Agnostic**: Works with pybricks-micropython, standard MicroPython, SPIKE, Robot Inventor, and Raspberry Pi CPython
 
 ## Installation
 
@@ -55,7 +59,75 @@ Or copy `pyhuskylens/pyhuskylens.py` to your device's filesystem.
 
 Copy the library file to your project and import directly.
 
+### Raspberry Pi (CPython)
+
+Install from PyPI:
+
+```bash
+pip install pyhuskylens
+```
+
+For I2C support, install smbus2:
+
+```bash
+pip install pyhuskylens[i2c]
+```
+
+For Serial/UART support, install pyserial:
+
+```bash
+pip install pyhuskylens[serial]
+```
+
+For both I2C and Serial:
+
+```bash
+pip install pyhuskylens[all]
+```
+
 ## Quick Start
+
+### Raspberry Pi I2C
+
+```python
+from pyhuskylens import HuskyLens, ALGORITHM_OBJECT_RECOGNITION
+
+# Use I2C bus number (0 or 1, typically 1 on Raspberry Pi)
+hl = HuskyLens(1)  # Automatically uses HuskyLensI2C_RPi
+
+if hl.knock():
+    print("Connected to HuskyLens V" + str(hl.version))
+    
+    # Set algorithm
+    hl.set_alg(ALGORITHM_OBJECT_RECOGNITION)
+    
+    # Get detected objects
+    blocks = hl.get_blocks()
+    print("Found " + str(len(blocks)) + " objects")
+    
+    for block in blocks:
+        print("Object at ({},{}) size {}x{}".format(
+            block.x, block.y, block.width, block.height))
+```
+
+### Raspberry Pi Serial
+
+```python
+from pyhuskylens import HuskyLens, ALGORITHM_FACE_RECOGNITION
+
+# Use serial port path (typically /dev/ttyUSB0 or /dev/ttyAMA0)
+hl = HuskyLens("/dev/ttyUSB0")  # Automatically uses HuskyLensSerial_RPi
+
+if hl.knock():
+    print("Connected!")
+    hl.set_alg(ALGORITHM_FACE_RECOGNITION)
+    
+    while True:
+        blocks = hl.get_blocks(learned=True)
+        if len(blocks) > 0:
+            face = blocks[0]
+            print("Hello, ID: " + str(face.ID))
+```
 
 ### Simple Object Detection with Auto-Detection
 
@@ -208,10 +280,29 @@ while True:
 - **Connections**: SDA, SCL, GND, 5V
 
 ```python
+# Raspberry Pi Example (uses I2C bus number)
+hl = HuskyLens(1)  # I2C bus 1 (/dev/i2c-1)
+
 # ESP32 Example
 from machine import Pin, SoftI2C
 i2c = SoftI2C(scl=Pin(22), sda=Pin(21), freq=100000)
 hl = HuskyLens(i2c)
+```
+
+**Raspberry Pi I2C Setup:**
+
+Enable I2C using `raspi-config`:
+
+```bash
+sudo raspi-config
+# Select: Interface Options → I2C → Yes
+```
+
+Verify I2C is working:
+
+```bash
+sudo apt-get install i2c-tools
+i2cdetect -y 1  # Should show 0x32 (V1) or 0x50 (V2)
 ```
 
 ### Serial/UART Connection
@@ -222,6 +313,11 @@ hl = HuskyLens(i2c)
 - Also connect **GND** and **5V**
 
 ```python
+# Raspberry Pi Example (uses serial port path)
+hl = HuskyLens("/dev/ttyUSB0")  # USB serial adapter
+# or
+hl = HuskyLens("/dev/ttyAMA0")  # Built-in UART (Raspberry Pi 3/4/5)
+
 # ESP32 Example
 from machine import UART
 uart = UART(1, baudrate=9600, tx=17, rx=16)
@@ -235,6 +331,18 @@ hl = HuskyLens(uart)
 
 # SPIKE Prime Example (port string auto-handles setup)
 hl = HuskyLens('E')  # Port E
+```
+
+**Raspberry Pi Serial Setup:**
+
+For built-in UART (`/dev/ttyAMA0`), disable the serial console:
+
+```bash
+sudo raspi-config
+# Select: Interface Options → Serial Port
+# "Would you like a login shell accessible over serial?" → No
+# "Would you like the serial port hardware enabled?" → Yes
+sudo reboot
 ```
 
 ### SPIKE/Robot Inventor Wiring
@@ -292,18 +400,28 @@ Explore the [Projects](Projects/) directory for complete working examples:
 
 Universal constructor with auto-detection. Accepts:
 
-- **I2C object**: Returns `HuskyLensI2C` instance
-- **UART object**: Returns `HuskyLensSerial` instance  
+- **I2C object** (MicroPython): Returns `HuskyLensI2C` instance
+- **Integer** (Raspberry Pi): I2C bus number → Returns `HuskyLensI2C_RPi` instance
+- **String starting with "/dev/"** (Raspberry Pi): Serial port path → Returns `HuskyLensSerial_RPi` instance
+- **UART object** (MicroPython): Returns `HuskyLensSerial` instance  
 - **Port string** (SPIKE/Inventor): Returns configured `HuskyLensSerial`
 - **Port object** (Pybricks): Returns configured `HuskyLensSerial`
 
+#### `HuskyLensI2C_RPi(bus=1, debug=False)`
+
+Raspberry Pi I2C interface using smbus2. Requires `pip install smbus2`.
+
+#### `HuskyLensSerial_RPi(port, baud=9600, debug=False)`
+
+Raspberry Pi Serial interface using pyserial. Requires `pip install pyserial`.
+
 #### `HuskyLensI2C(i2c, debug=False)`
 
-Direct I2C interface constructor.
+Direct I2C interface constructor (MicroPython).
 
 #### `HuskyLensSerial(uart, debug=False)`
 
-Direct Serial/UART interface constructor.
+Direct Serial/UART interface constructor (MicroPython).
 
 ### Connection Methods
 
@@ -400,17 +518,6 @@ COLOR_BLUE = 4
 COLOR_YELLOW = 5
 ```
 
-### Result Dictionary Keys
-
-```python
-BLOCKS = 'blocks'
-ARROWS = 'arrows'
-FACES = 'faces'
-HANDS = 'hands'
-POSES = 'poses'
-FRAME = 'frame'
-```
-
 ### Data Objects
 
 #### Block
@@ -479,6 +586,7 @@ Clamp value to specified range.
 
 ## Supported Platforms
 
+- ✅ **Raspberry Pi** (3/4/5/Zero 2W) with CPython 3.7+
 - ✅ **ESP32** with MicroPython
 - ✅ **LEGO SPIKE Prime / Essential** (with MicroPython firmware)
 - ✅ **LEGO MINDSTORMS Robot Inventor 51515**
@@ -520,6 +628,15 @@ Clamp value to specified range.
 - ✓ V2 hardware is generally faster than V1
 
 ### Platform-Specific
+
+#### Raspberry Pi
+
+- I2C is automatically detected when passing an integer (bus number)
+- Serial is automatically detected when passing a path starting with "/dev/"
+- Requires `smbus2` for I2C: `pip install pyhuskylens[i2c]`
+- Requires `pyserial` for Serial: `pip install pyhuskylens[serial]`
+- Enable I2C/Serial in `raspi-config` before use
+- Built-in UART on GPIO 14/15 is `/dev/ttyAMA0` (Raspberry Pi 3/4/5)
 
 #### SPIKE Prime / Robot Inventor
 

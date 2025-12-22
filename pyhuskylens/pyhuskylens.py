@@ -7,14 +7,30 @@ Copyright (c) 2025 Antons Mindstorms
 
 import struct
 import time
-from micropython import const
 from math import atan2, degrees
+
+try:
+    from micropython import native # Native compilation support (optional)
+    from micropython import const
+except ImportError:
+    native = lambda f: f  # Fallback for CPython
+    def const(value):
+        """Fallback const function that just returns the value."""
+        return value
 
 # Demo constants when running as main
 EV3_PYBRICKS_SERIAL = const(0)
 INVENTOR_SERIAL = const(1)
 ESP32_I2C = const(3)
 MAIN_DEMO_TYPE = ESP32_I2C  # Change this to test different interfaces
+
+# Timing constants (milliseconds) - adjust these to tune performance
+DELAY_AFTER_WRITE = const(5)  # Delay after writing commands
+DELAY_V2_INITIAL = const(50)  # Initial delay for V2 get() response
+DELAY_V2_BETWEEN = const(10)  # Delay between V2 result packets
+DELAY_SERIAL_READ = const(1)  # Delay between serial read attempts
+DELAY_KNOCK_RETRY = const(10)  # Delay between knock retry attempts (V1)
+DELAY_KNOCK_RETRY_V2 = const(50)  # Delay between knock retry attempts (V2)
 
 # Protocol headers
 HEADER_V1 = b"\x55\xaa\x11"
@@ -113,20 +129,13 @@ class Arrow:
         self.type = "ARROW"
 
     def __repr__(self):
-        return (
-            "Arrow(tail=("
-            + str(self.x_tail)
-            + ","
-            + str(self.y_tail)
-            + "), head=("
-            + str(self.x_head)
-            + ","
-            + str(self.y_head)
-            + "), dir="
-            + str(self.direction)
-            + ", ID="
-            + str(self.ID)
-            + ")"
+        return "Arrow(tail=(%d,%d), head=(%d,%d), dir=%.1f, ID=%d)" % (
+            self.x_tail,
+            self.y_tail,
+            self.x_head,
+            self.y_head,
+            self.direction,
+            self.ID,
         )
 
 
@@ -158,25 +167,18 @@ class Block:
         self.type = "BLOCK"
 
     def __repr__(self):
-        s = (
-            "Block(x="
-            + str(self.x)
-            + ", y="
-            + str(self.y)
-            + ", w="
-            + str(self.width)
-            + ", h="
-            + str(self.height)
-            + ", ID="
-            + str(self.ID)
-        )
+        parts = [
+            "Block(x=%d, y=%d, w=%d, h=%d, ID=%d"
+            % (self.x, self.y, self.width, self.height, self.ID)
+        ]
         if self.confidence:
-            s += ", conf=" + str(self.confidence)
+            parts.append(", conf=%d" % self.confidence)
         if self.name:
-            s += ", name='" + self.name + "'"
+            parts.append(", name='%s'" % self.name)
         if self.content:
-            s += ", content='" + self.content + "'"
-        return s + ")"
+            parts.append(", content='%s'" % self.content)
+        parts.append(")")
+        return "".join(parts)
 
 
 class Face:
@@ -223,15 +225,7 @@ class Face:
             self.rmouth_x, self.rmouth_y = landmarks[8], landmarks[9]
 
     def __repr__(self):
-        return (
-            "Face(x="
-            + str(self.x)
-            + ", y="
-            + str(self.y)
-            + ", ID="
-            + str(self.ID)
-            + ")"
-        )
+        return "Face(x=%d, y=%d, ID=%d)" % (self.x, self.y, self.ID)
 
 
 class Hand:
@@ -374,18 +368,12 @@ class Hand:
             )
 
     def __repr__(self):
-        return (
-            "Hand(x="
-            + str(self.x)
-            + ", y="
-            + str(self.y)
-            + ", ID="
-            + str(self.ID)
-            + ", wrist=("
-            + str(self.wrist_x)
-            + ","
-            + str(self.wrist_y)
-            + "))"
+        return "Hand(x=%d, y=%d, ID=%d, wrist=(%d,%d))" % (
+            self.x,
+            self.y,
+            self.ID,
+            self.wrist_x,
+            self.wrist_y,
         )
 
 
@@ -469,18 +457,12 @@ class Pose:
             self.rankle_x, self.rankle_y = keypoints[32], keypoints[33]
 
     def __repr__(self):
-        return (
-            "Pose(x="
-            + str(self.x)
-            + ", y="
-            + str(self.y)
-            + ", ID="
-            + str(self.ID)
-            + ", nose=("
-            + str(self.nose_x)
-            + ","
-            + str(self.nose_y)
-            + "))"
+        return "Pose(x=%d, y=%d, ID=%d, nose=(%d,%d))" % (
+            self.x,
+            self.y,
+            self.ID,
+            self.nose_x,
+            self.nose_y,
         )
 
 
@@ -492,6 +474,9 @@ class HuskyLensBase:
         self.version = None
         self.connected = False
         self.current_algorithm = ALGORITHM_OBJECT_RECOGNITION
+        # Pre-allocated command buffers for reduced allocations
+        self._cmd_buf_v1 = bytearray(256)
+        self._cmd_buf_v2 = bytearray(256)
 
     # Abstract methods for subclasses
     def _transport_write(self, data):
@@ -507,29 +492,37 @@ class HuskyLensBase:
         raise NotImplementedError
 
     # Utilities
+    @native
     def _checksum(self, data):
-        return sum(data) & 0xFF
+        """Calculate checksum - optimized manual loop."""
+        cs = 0
+        for b in data:
+            cs += b
+        return cs & 0xFF
 
     def _write(self, data):
         try:
             if self.version == 2:
                 self._transport_flush()
             self._transport_write(data)
-            time.sleep_ms(5)
+            time.sleep_ms(DELAY_AFTER_WRITE)
         except Exception as e:
             if self.debug:
                 print("Write error: " + str(e))
 
     # V1 protocol
     def _cmd_v1(self, command, payload=None):
-        if payload is None:
-            payload = bytearray()
-        data = bytearray(HEADER_V1)
-        data.append(len(payload))
-        data.append(command)
-        data.extend(payload)
-        data.append(self._checksum(data))
-        self._write(bytes(data))
+        """Send V1 command using pre-allocated buffer."""
+        payload_len = len(payload) if payload else 0
+        buf = self._cmd_buf_v1
+        buf[0:3] = HEADER_V1
+        buf[3] = payload_len
+        buf[4] = command
+        if payload:
+            buf[5 : 5 + payload_len] = payload
+        chk_pos = 5 + payload_len
+        buf[chk_pos] = self._checksum(memoryview(buf[:chk_pos]))
+        self._write(bytes(buf[: chk_pos + 1]))
 
     def _read_v1(self):
         try:
@@ -558,13 +551,19 @@ class HuskyLensBase:
 
     # V2 protocol
     def _cmd_v2(self, command, algorithm=0, content=None):
-        packet = bytearray(
-            [0x55, 0xAA, command, algorithm, len(content) if content else 0]
-        )
+        """Send V2 command using pre-allocated buffer."""
+        content_len = len(content) if content else 0
+        buf = self._cmd_buf_v2
+        buf[0] = 0x55
+        buf[1] = 0xAA
+        buf[2] = command
+        buf[3] = algorithm
+        buf[4] = content_len
         if content:
-            packet.extend(content)
-        packet.append(self._checksum(packet))
-        self._write(bytes(packet))
+            buf[5 : 5 + content_len] = content
+        chk_pos = 5 + content_len
+        buf[chk_pos] = self._checksum(memoryview(buf[:chk_pos]))
+        self._write(bytes(buf[: chk_pos + 1]))
 
     def _read_v2(self):
         try:
@@ -580,14 +579,15 @@ class HuskyLensBase:
     # Public API
     def knock(self):
         """Test connection."""
-        if self.version == 1:
+        v = self.version  # Cache version check
+        if v == 1:
             self._cmd_v1(CMD_REQUEST_KNOCK)
             for _ in range(10):
                 cmd, _ = self._read_v1()
                 if cmd == CMD_RETURN_OK:
                     self.connected = True
                     return True
-                time.sleep_ms(10)
+                time.sleep_ms(DELAY_KNOCK_RETRY)
         else:  # V2
             for _ in range(5):
                 try:
@@ -603,7 +603,7 @@ class HuskyLensBase:
                 except Exception as e:
                     if self.debug:
                         print("Knock V2 error: " + str(e))
-                time.sleep_ms(50)
+                time.sleep_ms(DELAY_KNOCK_RETRY_V2)
         self.connected = False
         return False
 
@@ -611,10 +611,12 @@ class HuskyLensBase:
         """Switch algorithm."""
         if algorithm is None:
             algorithm = self.current_algorithm
-        if algorithm == self.current_algorithm and self.version == 2:
+
+        v = self.version  # Cache version check
+        if algorithm == self.current_algorithm and v == 2:
             return True
 
-        if self.version == 1:
+        if v == 1:
             # check algo available, and +1 for V1 indexing
             if 0 < algorithm < 7:
                 algorithm -= 1
@@ -667,8 +669,9 @@ class HuskyLensBase:
             algorithm = self.current_algorithm
 
         blocks, arrows, faces, hands, poses = [], [], [], [], []
+        v = self.version  # Cache version check
 
-        if self.version == 1:
+        if v == 1:
             if ID is not None:
                 payload = bytearray(struct.pack("h", ID))
                 self._cmd_v1(CMD_REQUEST_BY_ID, payload)
@@ -686,20 +689,29 @@ class HuskyLensBase:
                         print("Info parse error: " + str(e))
                     n_objs = 0
 
+                # Single-pass filtering for V1
                 for _ in range(n_objs):
                     cmd, data = self._read_v1()
                     try:
                         if cmd == CMD_RETURN_BLOCK:
-                            blocks.append(Block(*struct.unpack("hhhhh", data)))
+                            obj = Block(*struct.unpack("hhhhh", data))
+                            if (ID is None or obj.ID == ID) and (
+                                not learned or obj.learned
+                            ):
+                                blocks.append(obj)
                         elif cmd == CMD_RETURN_ARROW:
-                            arrows.append(Arrow(*struct.unpack("hhhhh", data)))
+                            obj = Arrow(*struct.unpack("hhhhh", data))
+                            if (ID is None or obj.ID == ID) and (
+                                not learned or obj.learned
+                            ):
+                                arrows.append(obj)
                     except Exception as e:
                         if self.debug:
                             print("Object parse error: " + str(e))
 
         else:  # V2
             self._cmd_v2(CMD_GET_RESULT_V2, algorithm)
-            time.sleep_ms(50)
+            time.sleep_ms(DELAY_V2_INITIAL)
 
             info = self._read_v2()
             if info and info[2] == CMD_RETURN_INFO_V2:
@@ -711,11 +723,16 @@ class HuskyLensBase:
                     n_results = 0
 
                 for _ in range(n_results):
-                    time.sleep_ms(10)
+                    time.sleep_ms(DELAY_V2_BETWEEN)
                     pkt = self._read_v2()
                     if pkt:
                         obj = self._parse_v2(pkt, algorithm)
-                        if obj:
+                        # Single-pass filtering - apply filter immediately
+                        if (
+                            obj
+                            and (ID is None or obj.ID == ID)
+                            and (not learned or obj.learned)
+                        ):
                             if obj.type == "BLOCK":
                                 blocks.append(obj)
                             elif obj.type == "FACE":
@@ -728,20 +745,6 @@ class HuskyLensBase:
                                 arrows.append(obj)
 
             self._transport_flush()
-
-        # Apply filters
-        if ID is not None:
-            blocks = [b for b in blocks if b.ID == ID]
-            arrows = [a for a in arrows if a.ID == ID]
-            faces = [f for f in faces if f.ID == ID]
-            hands = [h for h in hands if h.ID == ID]
-            poses = [p for p in poses if p.ID == ID]
-        elif learned:
-            blocks = [b for b in blocks if b.learned]
-            arrows = [a for a in arrows if a.learned]
-            faces = [f for f in faces if f.learned]
-            hands = [h for h in hands if h.learned]
-            poses = [p for p in poses if p.learned]
 
         return {
             BLOCKS: blocks,
@@ -760,8 +763,9 @@ class HuskyLensBase:
         """Get arrows only."""
         return self.get(algorithm, ID, learned)[ARROWS]
 
+    @native
     def _parse_v2(self, data, algorithm):
-        """Parse V2 result packet."""
+        """Parse V2 result packet - optimized."""
         if len(data) < 15:
             return None
 
@@ -799,16 +803,16 @@ class HuskyLensBase:
                 if self.debug:
                     print("String parse error: " + str(e))
 
-        # Parse keypoints
+        # Parse keypoints - optimized single unpack
         keypoints = []
         if len(data) > offset + 1:
             try:
-                for i in range((len(data) - offset - 1) // 2):
-                    if offset + 2 <= len(data) - 1:
-                        keypoints.append(
-                            struct.unpack("<h", bytes(data[offset : offset + 2]))[0]
-                        )
-                        offset += 2
+                count = (len(data) - offset - 1) // 2
+                if count > 0:
+                    fmt = "<%dh" % count
+                    keypoints = list(
+                        struct.unpack(fmt, bytes(data[offset : offset + count * 2]))
+                    )
             except Exception as e:
                 if self.debug:
                     print("Keypoint parse error: " + str(e))
@@ -842,7 +846,8 @@ class HuskyLensBase:
         elif y is None:
             y = position[1]
 
-        if self.version == 1:
+        v = self.version  # Cache version check
+        if v == 1:
             params = bytearray([len(text), 0 if x <= 255 else 0xFF, x % 255, y])
             params.extend(text.encode("utf-8"))
             self._cmd_v1(CMD_REQUEST_CUSTOM_TEXT, params)
@@ -857,7 +862,8 @@ class HuskyLensBase:
 
     def clear_text(self):
         """Clear text from screen."""
-        if self.version == 1:
+        v = self.version  # Cache version check
+        if v == 1:
             self._cmd_v1(CMD_REQUEST_CLEAR_TEXT)
         else:
             self._cmd_v2(CMD_ACTION_CLEAR_TEXT_V2, 0)
@@ -970,7 +976,7 @@ class HuskyLensSerial(HuskyLensBase):
                     data.extend(chunk)
             if len(data) >= size:
                 return bytes(data[:size])
-            time.sleep_ms(1)
+            time.sleep_ms(DELAY_SERIAL_READ)
         return bytes(data)
 
     def _transport_flush(self):

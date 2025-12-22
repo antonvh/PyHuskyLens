@@ -10,96 +10,128 @@ import time
 from math import atan2, degrees
 
 try:
-    from micropython import native # Native compilation support (optional)
+    from micropython import native  # Native compilation support (optional)
     from micropython import const
+    from time import sleep_ms
 except ImportError:
     native = lambda f: f  # Fallback for CPython
+
+    def sleep_ms(ms):
+        time.sleep(ms / 1000.0)
+
     def const(value):
-        """Fallback const function that just returns the value."""
         return value
 
-# Demo constants when running as main
-EV3_PYBRICKS_SERIAL = const(0)
-INVENTOR_SERIAL = const(1)
-ESP32_I2C = const(3)
-MAIN_DEMO_TYPE = ESP32_I2C  # Change this to test different interfaces
 
-# Timing constants (milliseconds) - adjust these to tune performance
-DELAY_AFTER_WRITE = const(5)  # Delay after writing commands
-DELAY_V2_INITIAL = const(50)  # Initial delay for V2 get() response
-DELAY_V2_BETWEEN = const(10)  # Delay between V2 result packets
-DELAY_SERIAL_READ = const(1)  # Delay between serial read attempts
-DELAY_KNOCK_RETRY = const(10)  # Delay between knock retry attempts (V1)
-DELAY_KNOCK_RETRY_V2 = const(50)  # Delay between knock retry attempts (V2)
+# Internal demo constants (not exported)
+_EV3_PYBRICKS_SERIAL = const(0)
+_INVENTOR_SERIAL = const(1)
+_ESP32_I2C = const(3)
+_MAIN_DEMO_TYPE = _ESP32_I2C  # Change this to test different interfaces
 
-# Protocol headers
-HEADER_V1 = b"\x55\xaa\x11"
-HEADER_V2 = b"\x55\xaa"
+# Internal timing constants (milliseconds) - adjust these to tune performance
+_DELAY_AFTER_WRITE = const(5)  # Delay after writing commands
+_DELAY_V2_INITIAL = const(50)  # Initial delay for V2 get() response
+_DELAY_V2_BETWEEN = const(10)  # Delay between V2 result packets
+_DELAY_SERIAL_READ = const(1)  # Delay between serial read attempts
+_DELAY_KNOCK_RETRY = const(10)  # Delay between knock retry attempts (V1)
+_DELAY_KNOCK_RETRY_V2 = const(50)  # Delay between knock retry attempts (V2)
 
-# V1 Commands
-CMD_REQUEST = const(0x20)
-CMD_REQUEST_BY_ID = const(0x26)
-CMD_REQUEST_LEARNED = const(0x23)
-CMD_RETURN_INFO = const(0x29)
-CMD_RETURN_BLOCK = const(0x2A)
-CMD_RETURN_ARROW = const(0x2B)
-CMD_REQUEST_KNOCK = const(0x2C)
-CMD_REQUEST_ALGORITHM = const(0x2D)
-CMD_RETURN_OK = const(0x2E)
-CMD_REQUEST_CUSTOM_TEXT = const(0x34)
-CMD_REQUEST_CLEAR_TEXT = const(0x35)
-CMD_REQUEST_FIRMWARE_VERSION = const(0x3C)
+# Internal protocol headers
+_HEADER_V1 = b"\x55\xaa\x11"
+_HEADER_V2 = b"\x55\xaa"
 
-# V2 Commands
-CMD_KNOCK_V2 = const(0x20)
-CMD_GET_RESULT_V2 = const(0x21)
-CMD_SET_ALGORITHM_V2 = const(0x30)
-CMD_SET_MULTI_ALGORITHM_V2 = const(0x32)
-CMD_SET_MULTI_ALGORITHM_RATIO_V2 = const(0x33)
-CMD_RETURN_OK_V2 = const(0x40)
-CMD_RETURN_INFO_V2 = const(0x42)
-CMD_RETURN_BLOCK_V2 = const(0x43)
-CMD_RETURN_ARROW_V2 = const(0x44)
-CMD_ACTION_DRAW_TEXT_V2 = const(0x58)
-CMD_ACTION_CLEAR_TEXT_V2 = const(0x59)
-CMD_ACTION_DRAW_RECT_V2 = const(0x56)
-CMD_ACTION_CLEAN_RECT_V2 = const(0x57)
+# Internal V1 Commands
+_CMD_REQUEST = const(0x20)
+_CMD_REQUEST_BY_ID = const(0x26)
+_CMD_REQUEST_LEARNED = const(0x23)
+_CMD_RETURN_INFO = const(0x29)
+_CMD_RETURN_BLOCK = const(0x2A)
+_CMD_RETURN_ARROW = const(0x2B)
+_CMD_REQUEST_KNOCK = const(0x2C)
+_CMD_REQUEST_ALGORITHM = const(0x2D)
+_CMD_RETURN_OK = const(0x2E)
+_CMD_REQUEST_CUSTOM_TEXT = const(0x34)
+_CMD_REQUEST_CLEAR_TEXT = const(0x35)
+_CMD_REQUEST_FIRMWARE_VERSION = const(0x3C)
 
-# Algorithms
+# Internal V2 Commands
+_CMD_KNOCK_V2 = const(0x20)
+_CMD_GET_RESULT_V2 = const(0x21)
+_CMD_SET_ALGORITHM_V2 = const(0x30)
+_CMD_SET_MULTI_ALGORITHM_V2 = const(0x32)
+_CMD_SET_MULTI_ALGORITHM_RATIO_V2 = const(0x33)
+_CMD_RETURN_OK_V2 = const(0x40)
+_CMD_RETURN_INFO_V2 = const(0x42)
+_CMD_RETURN_BLOCK_V2 = const(0x43)
+_CMD_RETURN_ARROW_V2 = const(0x44)
+_CMD_ACTION_DRAW_TEXT_V2 = const(0x58)
+_CMD_ACTION_CLEAR_TEXT_V2 = const(0x59)
+_CMD_ACTION_DRAW_RECT_V2 = const(0x56)
+_CMD_ACTION_CLEAN_RECT_V2 = const(0x57)
+
+# Algorithm constants for selecting detection modes
+#: Main menu screen (no detection active)
 ALGORITHM_MENU = const(0)
+#: Face recognition with ID assignment and learning
 ALGORITHM_FACE_RECOGNITION = const(1)
+#: Object tracking - follows detected objects across frames
 ALGORITHM_OBJECT_TRACKING = const(2)
+#: Object recognition - detects and classifies objects
 ALGORITHM_OBJECT_RECOGNITION = const(3)
+#: Line tracking - detects lines and arrows for line following
 ALGORITHM_LINE_TRACKING = const(4)
+#: Color recognition - identifies colors in blocks
 ALGORITHM_COLOR_RECOGNITION = const(5)
+#: AprilTag recognition - detects fiducial markers
 ALGORITHM_TAG_RECOGNITION = const(6)
+#: Object classification - categorizes objects into classes
 ALGORITHM_OBJECT_CLASSIFICATION = const(7)
+#: Optical character recognition - reads text
 ALGORITHM_OCR = const(8)
+#: License plate recognition (V2 only)
 ALGORITHM_LICENSE_RECOGNITION = const(9)
+#: QR code recognition - reads QR codes
 ALGORITHM_QR_CODE_RECOGNITION = const(10)
+#: Barcode recognition - reads barcodes
 ALGORITHM_BARCODE_RECOGNITION = const(11)
+#: Face emotion recognition - detects facial expressions (V2 only)
 ALGORITHM_FACE_EMOTION_RECOGNITION = const(12)
+#: Pose recognition - detects body keypoints (V2 only)
 ALGORITHM_POSE_RECOGNITION = const(13)
+#: Hand recognition - detects hand keypoints (V2 only)
 ALGORITHM_HAND_RECOGNITION = const(14)
 
-# Colors
+# Color constants for text and drawing operations
+#: Black color (0)
 COLOR_BLACK = const(0)
+#: White color (1)
 COLOR_WHITE = const(1)
+#: Red color (2)
 COLOR_RED = const(2)
+#: Green color (3)
 COLOR_GREEN = const(3)
+#: Blue color (4)
 COLOR_BLUE = const(4)
+#: Yellow color (5)
 COLOR_YELLOW = const(5)
 
-# Result dict keys (backward compatibility)
+# Result dictionary keys for accessing detection results
+#: Key for accessing block/object detections in result dict
 BLOCKS = "blocks"
+#: Key for accessing arrow/line detections in result dict
 ARROWS = "arrows"
+#: Key for accessing frame data in result dict (legacy, always None)
 FRAME = "frame"
+#: Key for accessing face detections with landmarks in result dict (V2 only)
 FACES = "faces"
+#: Key for accessing hand detections with keypoints in result dict (V2 only)
 HANDS = "hands"
+#: Key for accessing pose detections with keypoints in result dict (V2 only)
 POSES = "poses"
 
-# I2C Register for V1
-I2C_REG_V1 = const(0x0C)
+# Internal I2C Register for V1
+_I2C_REG_V1 = const(0x0C)
 
 
 class Arrow:
@@ -505,7 +537,7 @@ class HuskyLensBase:
             if self.version == 2:
                 self._transport_flush()
             self._transport_write(data)
-            time.sleep_ms(DELAY_AFTER_WRITE)
+            time.sleep_ms(_DELAY_AFTER_WRITE)
         except Exception as e:
             if self.debug:
                 print("Write error: " + str(e))
@@ -515,7 +547,7 @@ class HuskyLensBase:
         """Send V1 command using pre-allocated buffer."""
         payload_len = len(payload) if payload else 0
         buf = self._cmd_buf_v1
-        buf[0:3] = HEADER_V1
+        buf[0:3] = _HEADER_V1
         buf[3] = payload_len
         buf[4] = command
         if payload:
@@ -527,7 +559,7 @@ class HuskyLensBase:
     def _read_v1(self):
         try:
             for _ in range(50):
-                if self._transport_read(3) == HEADER_V1:
+                if self._transport_read(3) == _HEADER_V1:
                     break
             else:
                 return None, None
@@ -537,7 +569,7 @@ class HuskyLensBase:
             payload = self._transport_read(length) if length else bytearray()
             checksum = self._transport_read(1)[0]
 
-            expected = bytearray(HEADER_V1)
+            expected = bytearray(_HEADER_V1)
             expected.append(length)
             expected.append(command)
             expected.extend(payload)
@@ -568,7 +600,7 @@ class HuskyLensBase:
     def _read_v2(self):
         try:
             header = self._transport_read(5)
-            if len(header) == 5 and header[:2] == HEADER_V2:
+            if len(header) == 5 and header[:2] == _HEADER_V2:
                 size = header[4]
                 return header + self._transport_read(size + 1)
         except Exception as e:
@@ -581,29 +613,29 @@ class HuskyLensBase:
         """Test connection."""
         v = self.version  # Cache version check
         if v == 1:
-            self._cmd_v1(CMD_REQUEST_KNOCK)
+            self._cmd_v1(_CMD_REQUEST_KNOCK)
             for _ in range(10):
                 cmd, _ = self._read_v1()
-                if cmd == CMD_RETURN_OK:
+                if cmd == _CMD_RETURN_OK:
                     self.connected = True
                     return True
-                time.sleep_ms(DELAY_KNOCK_RETRY)
+                time.sleep_ms(_DELAY_KNOCK_RETRY)
         else:  # V2
             for _ in range(5):
                 try:
-                    self._cmd_v2(CMD_KNOCK_V2)
+                    self._cmd_v2(_CMD_KNOCK_V2)
                     resp = self._transport_read(6)
                     if (
                         len(resp) >= 3
-                        and resp[:2] == HEADER_V2
-                        and resp[2] == CMD_RETURN_OK_V2
+                        and resp[:2] == _HEADER_V2
+                        and resp[2] == _CMD_RETURN_OK_V2
                     ):
                         self.connected = True
                         return True
                 except Exception as e:
                     if self.debug:
                         print("Knock V2 error: " + str(e))
-                time.sleep_ms(DELAY_KNOCK_RETRY_V2)
+                time.sleep_ms(_DELAY_KNOCK_RETRY_V2)
         self.connected = False
         return False
 
@@ -623,11 +655,11 @@ class HuskyLensBase:
             elif 10 <= algorithm <= 11:
                 algorithm -= 3
             payload = bytearray(struct.pack("h", algorithm))
-            self._cmd_v1(CMD_REQUEST_ALGORITHM, payload)
+            self._cmd_v1(_CMD_REQUEST_ALGORITHM, payload)
         else:  # V2
             content = bytearray([algorithm, 0])
             content.extend(struct.pack("<hhhh", 0, 0, 0, 0))
-            self._cmd_v2(CMD_SET_ALGORITHM_V2, 0, content)
+            self._cmd_v2(_CMD_SET_ALGORITHM_V2, 0, content)
 
         result = self.knock()
         if result:
@@ -645,14 +677,14 @@ class HuskyLensBase:
                 struct.pack("<h", algorithms[i] if i < len(algorithms) else 0)
             )
 
-        self._cmd_v2(CMD_SET_MULTI_ALGORITHM_V2, 0, content)
+        self._cmd_v2(_CMD_SET_MULTI_ALGORITHM_V2, 0, content)
         return self.knock()
 
     def get_version(self):
         """Get firmware version (V1 only)."""
         if self.version != 1:
             return None
-        self._cmd_v1(CMD_REQUEST_FIRMWARE_VERSION)
+        self._cmd_v1(_CMD_REQUEST_FIRMWARE_VERSION)
         cmd, payload = self._read_v1()
         if payload:
             try:
@@ -674,14 +706,14 @@ class HuskyLensBase:
         if v == 1:
             if ID is not None:
                 payload = bytearray(struct.pack("h", ID))
-                self._cmd_v1(CMD_REQUEST_BY_ID, payload)
+                self._cmd_v1(_CMD_REQUEST_BY_ID, payload)
             elif learned:
-                self._cmd_v1(CMD_REQUEST_LEARNED)
+                self._cmd_v1(_CMD_REQUEST_LEARNED)
             else:
-                self._cmd_v1(CMD_REQUEST)
+                self._cmd_v1(_CMD_REQUEST)
 
             cmd, info = self._read_v1()
-            if cmd == CMD_RETURN_INFO:
+            if cmd == _CMD_RETURN_INFO:
                 try:
                     n_objs = struct.unpack("h", info[:2])[0] if info else 0
                 except Exception as e:
@@ -693,13 +725,13 @@ class HuskyLensBase:
                 for _ in range(n_objs):
                     cmd, data = self._read_v1()
                     try:
-                        if cmd == CMD_RETURN_BLOCK:
+                        if cmd == _CMD_RETURN_BLOCK:
                             obj = Block(*struct.unpack("hhhhh", data))
                             if (ID is None or obj.ID == ID) and (
                                 not learned or obj.learned
                             ):
                                 blocks.append(obj)
-                        elif cmd == CMD_RETURN_ARROW:
+                        elif cmd == _CMD_RETURN_ARROW:
                             obj = Arrow(*struct.unpack("hhhhh", data))
                             if (ID is None or obj.ID == ID) and (
                                 not learned or obj.learned
@@ -710,11 +742,11 @@ class HuskyLensBase:
                             print("Object parse error: " + str(e))
 
         else:  # V2
-            self._cmd_v2(CMD_GET_RESULT_V2, algorithm)
-            time.sleep_ms(DELAY_V2_INITIAL)
+            self._cmd_v2(_CMD_GET_RESULT_V2, algorithm)
+            time.sleep_ms(_DELAY_V2_INITIAL)
 
             info = self._read_v2()
-            if info and info[2] == CMD_RETURN_INFO_V2:
+            if info and info[2] == _CMD_RETURN_INFO_V2:
                 try:
                     n_results = struct.unpack("<h", info[7:9])[0]
                 except Exception as e:
@@ -723,7 +755,7 @@ class HuskyLensBase:
                     n_results = 0
 
                 for _ in range(n_results):
-                    time.sleep_ms(DELAY_V2_BETWEEN)
+                    time.sleep_ms(_DELAY_V2_BETWEEN)
                     pkt = self._read_v2()
                     if pkt:
                         obj = self._parse_v2(pkt, algorithm)
@@ -819,7 +851,7 @@ class HuskyLensBase:
 
         # Return appropriate class
         try:
-            if cmd == CMD_RETURN_BLOCK_V2:
+            if cmd == _CMD_RETURN_BLOCK_V2:
                 if algorithm == ALGORITHM_FACE_RECOGNITION and keypoints:
                     return Face(x, y, w, h, ID, conf, name, content, keypoints)
                 elif algorithm == ALGORITHM_HAND_RECOGNITION and keypoints:
@@ -828,7 +860,7 @@ class HuskyLensBase:
                     return Pose(x, y, w, h, ID, conf, name, content, keypoints)
                 else:
                     return Block(x, y, w, h, ID, conf, name, content)
-            elif cmd == CMD_RETURN_ARROW_V2:
+            elif cmd == _CMD_RETURN_ARROW_V2:
                 return Arrow(x, y, w, h, ID)
         except Exception as e:
             if self.debug:
@@ -850,23 +882,23 @@ class HuskyLensBase:
         if v == 1:
             params = bytearray([len(text), 0 if x <= 255 else 0xFF, x % 255, y])
             params.extend(text.encode("utf-8"))
-            self._cmd_v1(CMD_REQUEST_CUSTOM_TEXT, params)
+            self._cmd_v1(_CMD_REQUEST_CUSTOM_TEXT, params)
         else:  # V2
             content = bytearray([color, 0])
             content.extend(struct.pack("<hhhh", x, y, 0, 0))
             txt = text.encode("utf-8")
             content.append(len(txt))
             content.extend(txt)
-            self._cmd_v2(CMD_ACTION_DRAW_TEXT_V2, 0, content)
+            self._cmd_v2(_CMD_ACTION_DRAW_TEXT_V2, 0, content)
         return self.knock()
 
     def clear_text(self):
         """Clear text from screen."""
         v = self.version  # Cache version check
         if v == 1:
-            self._cmd_v1(CMD_REQUEST_CLEAR_TEXT)
+            self._cmd_v1(_CMD_REQUEST_CLEAR_TEXT)
         else:
-            self._cmd_v2(CMD_ACTION_CLEAR_TEXT_V2, 0)
+            self._cmd_v2(_CMD_ACTION_CLEAR_TEXT_V2, 0)
         return self.knock()
 
     def draw_rect(self, x1, y1, x2, y2, color=COLOR_WHITE):
@@ -875,14 +907,14 @@ class HuskyLensBase:
             return False
         content = bytearray([color, 0])
         content.extend(struct.pack("<hhhh", x1, y1, x2, y2))
-        self._cmd_v2(CMD_ACTION_DRAW_RECT_V2, 0, content)
+        self._cmd_v2(_CMD_ACTION_DRAW_RECT_V2, 0, content)
         return self.knock()
 
     def clear_rect(self):
         """Clear rectangles (V2 only)."""
         if self.version != 2:
             return False
-        self._cmd_v2(CMD_ACTION_CLEAN_RECT_V2, 0)
+        self._cmd_v2(_CMD_ACTION_CLEAN_RECT_V2, 0)
         return self.knock()
 
 
@@ -911,7 +943,7 @@ class HuskyLensI2C(HuskyLensBase):
     def _transport_write(self, data):
         if self.version == 1:
             # V1: Write to register 0x0C
-            self.i2c.writeto_mem(self.address, I2C_REG_V1, data)
+            self.i2c.writeto_mem(self.address, _I2C_REG_V1, data)
         else:
             # V2: Direct write
             self.i2c.writeto(self.address, data)
@@ -919,7 +951,7 @@ class HuskyLensI2C(HuskyLensBase):
     def _transport_read(self, size):
         if self.version == 1:
             # V1: Read from register 0x0C
-            return self.i2c.readfrom_mem(self.address, I2C_REG_V1, size)
+            return self.i2c.readfrom_mem(self.address, _I2C_REG_V1, size)
         else:
             # V2: Direct read
             return self.i2c.readfrom(self.address, size)
@@ -976,7 +1008,7 @@ class HuskyLensSerial(HuskyLensBase):
                     data.extend(chunk)
             if len(data) >= size:
                 return bytes(data[:size])
-            time.sleep_ms(DELAY_SERIAL_READ)
+            time.sleep_ms(_DELAY_SERIAL_READ)
         return bytes(data)
 
     def _transport_flush(self):
@@ -995,6 +1027,156 @@ class HuskyLensSerial(HuskyLensBase):
                 print("Flush error: " + str(e))
 
 
+class HuskyLensI2C_RPi(HuskyLensBase):
+    """HuskyLens I2C driver for Raspberry Pi using smbus2."""
+
+    ADDR_V1 = 0x32
+    ADDR_V2 = 0x50
+
+    def __init__(self, bus=1, address=None, debug=False):
+        """Initialize Raspberry Pi I2C.
+
+        Args:
+            bus: I2C bus number (default 1 for /dev/i2c-1)
+            address: I2C address (auto-detected if None)
+            debug: Enable debug output
+        """
+        super().__init__(debug)
+        try:
+            import smbus2
+
+            self.bus = smbus2.SMBus(bus)
+        except ImportError:
+            raise ImportError(
+                "smbus2 required for Raspberry Pi I2C. Install: pip install smbus2"
+            )
+
+        self.address = address
+        self.use_register = False
+        self._detect_version()
+
+    def _detect_version(self):
+        """Detect HuskyLens version by scanning I2C addresses."""
+        # Try to read from known addresses
+        for addr in [self.ADDR_V1, self.ADDR_V2]:
+            try:
+                # Attempt a test read
+                if addr == self.ADDR_V1:
+                    self.bus.read_byte_data(addr, 0x0C)
+                    self.version, self.address = 1, addr
+                    if self.debug:
+                        print("HuskyLens V1 @ 0x%02x" % addr)
+                    return
+                else:
+                    self.bus.read_byte(addr)
+                    self.version, self.address = 2, addr
+                    if self.debug:
+                        print("HuskyLens V2 @ 0x%02x" % addr)
+                    return
+            except:
+                continue
+
+        self.version = None
+        if self.debug:
+            print("No HuskyLens found on I2C")
+
+    def _transport_write(self, data):
+        """Write data to I2C bus."""
+        if self.version == 1:
+            # V1: Write to register 0x0C
+            self.bus.write_i2c_block_data(self.address, 0x0C, list(data))
+        else:
+            # V2: Direct write
+            self.bus.write_i2c_block_data(self.address, data[0], list(data[1:]))
+
+    def _transport_read(self, size):
+        """Read data from I2C bus."""
+        if self.version == 1:
+            # V1: Read from register 0x0C
+            return bytes(self.bus.read_i2c_block_data(self.address, 0x0C, size))
+        else:
+            # V2: Direct read
+            return bytes(self.bus.read_i2c_block_data(self.address, 0, size))
+
+    def _transport_flush(self):
+        """Flush I2C buffer (V2 only)."""
+        if self.version == 2:
+            for _ in range(5):
+                try:
+                    self.bus.read_i2c_block_data(self.address, 0, 16)
+                except:
+                    break
+
+
+class HuskyLensSerial_RPi(HuskyLensBase):
+    """HuskyLens Serial/UART driver for Raspberry Pi using pyserial."""
+
+    def __init__(self, port="/dev/ttyUSB0", baud=9600, debug=False):
+        """Initialize Raspberry Pi Serial.
+
+        Args:
+            port: Serial port path (e.g., '/dev/ttyUSB0', '/dev/ttyAMA0')
+            baud: Baud rate (default 9600)
+            debug: Enable debug output
+        """
+        super().__init__(debug)
+        try:
+            import serial
+
+            self.uart = serial.Serial(port, baud, timeout=0.1)
+        except ImportError:
+            raise ImportError(
+                "pyserial required for Raspberry Pi Serial. Install: pip install pyserial"
+            )
+        except Exception as e:
+            raise Exception("Failed to open serial port %s: %s" % (port, str(e)))
+
+        self._detect_version()
+
+    def _detect_version(self):
+        """Detect HuskyLens version by trying knock commands."""
+        # Try V2 first
+        self.version = 2
+        if self.knock():
+            if self.debug:
+                print("HuskyLens V2 (Serial)")
+            return
+        # Try V1
+        self.version = 1
+        if self.knock():
+            if self.debug:
+                print("HuskyLens V1 (Serial)")
+            return
+        self.version = None
+        if self.debug:
+            print("No HuskyLens on Serial")
+
+    def _transport_write(self, data):
+        """Write data to serial port."""
+        self.uart.write(data)
+
+    def _transport_read(self, size):
+        """Read data from serial port."""
+        data = bytearray()
+        for _ in range(150):
+            if self.uart.in_waiting:
+                chunk = self.uart.read(1)
+                if chunk:
+                    data.extend(chunk)
+            if len(data) >= size:
+                return bytes(data[:size])
+            time.sleep_ms(_DELAY_SERIAL_READ)
+        return bytes(data)
+
+    def _transport_flush(self):
+        """Flush serial buffer."""
+        try:
+            self.uart.reset_input_buffer()
+        except Exception as e:
+            if self.debug:
+                print("Flush error: " + str(e))
+
+
 # Backward compatibility wrapper
 def HuskyLens(port_or_i2c, baud=9600, debug=False, **kwargs):
     """
@@ -1002,26 +1184,47 @@ def HuskyLens(port_or_i2c, baud=9600, debug=False, **kwargs):
     Auto-detects I2C vs Serial/UART based on parameter type.
 
     Args:
-        port_or_i2c: I2C object, UART object, or Port string/object
+        port_or_i2c: I2C object, UART object, I2C bus number (RPi),
+                     serial port path (RPi), or Port string/object
         baud: Baud rate for serial (default 9600)
         debug: Enable debug output (default False)
 
     Returns:
-        HuskyLensI2C or HuskyLensSerial instance
+        HuskyLensI2C, HuskyLensSerial, or RPi variant instance
 
     Examples:
-        # I2C (ESP32, etc.)
-        hl = HuskyLens(i2c)
+        I2C (ESP32, MicroPython)::
 
-        # Serial UART object
-        hl = HuskyLens(uart)
+            hl = HuskyLens(i2c)
 
-        # SPIKE/Inventor port string
-        hl = HuskyLens('E', baud=9600)
+        Raspberry Pi I2C (bus number)::
 
-        # EV3 Pybricks Port
-        hl = HuskyLens(Port.S1)
+            hl = HuskyLens(1)  # /dev/i2c-1
+
+        Raspberry Pi Serial (device path)::
+
+            hl = HuskyLens('/dev/ttyUSB0', baud=9600)
+
+        Serial UART object (MicroPython)::
+
+            hl = HuskyLens(uart)
+
+        SPIKE/Inventor port string::
+
+            hl = HuskyLens('E', baud=9600)
+
+        EV3 Pybricks Port::
+
+            hl = HuskyLens(Port.S1)
     """
+    # Raspberry Pi I2C bus number (integer)
+    if isinstance(port_or_i2c, int):
+        return HuskyLensI2C_RPi(bus=port_or_i2c, debug=debug)
+
+    # Raspberry Pi serial port path (starts with /dev/)
+    if isinstance(port_or_i2c, str) and port_or_i2c.startswith("/dev/"):
+        return HuskyLensSerial_RPi(port=port_or_i2c, baud=baud, debug=debug)
+
     # Check if it's an I2C object (has readfrom or writeto methods)
     if hasattr(port_or_i2c, "readfrom") or hasattr(port_or_i2c, "writeto"):
         return HuskyLensI2C(port_or_i2c, debug=debug)
@@ -1068,7 +1271,7 @@ def clamp_int(value, min_val=-100, max_val=100):
 
 # Demo
 if __name__ == "__main__":
-    if MAIN_DEMO_TYPE == ESP32_I2C:
+    if _MAIN_DEMO_TYPE == _ESP32_I2C:
         from machine import Pin, SoftI2C
 
         print("=" * 60)
@@ -1117,15 +1320,15 @@ if __name__ == "__main__":
             else:
                 print("X Connection failed!")
 
-    if MAIN_DEMO_TYPE == EV3_PYBRICKS_SERIAL or MAIN_DEMO_TYPE == INVENTOR_SERIAL:
-        if MAIN_DEMO_TYPE == EV3_PYBRICKS_SERIAL:
+    if _MAIN_DEMO_TYPE == _EV3_PYBRICKS_SERIAL or _MAIN_DEMO_TYPE == _INVENTOR_SERIAL:
+        if _MAIN_DEMO_TYPE == _EV3_PYBRICKS_SERIAL:
             print("\n--- Serial Example Ev3dev Pybricks ---")
             from pybricks.iodevices import UARTDevice
             from pybricks.parameters import Port
 
             uart = UARTDevice(Port.A, 9600)
 
-        elif MAIN_DEMO_TYPE == INVENTOR_SERIAL:
+        elif _MAIN_DEMO_TYPE == _INVENTOR_SERIAL:
             print("\n--- Serial Example LEGO Inventor and SPIKE LEGACY---")
             from hub import port
 

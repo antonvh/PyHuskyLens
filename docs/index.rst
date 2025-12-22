@@ -34,13 +34,13 @@ Example
 -------
 Run this on LMS-ESP32
 
-.. literalinclude:: Projects/ESP32 Pupremote Huskylens/main.py
+.. literalinclude:: ../Projects/ESP32 Pupremote Huskylens/main.py
     :language: python
 
 Run this on Pybricks. Be sure to create a file called `pupremote.py` with
 the contents of `pupremote.py <https://github.com/antonvh/PUPRemote/blob/main/src/pupremote.py>`_.
 
-.. literalinclude:: Projects/ESP32 Pupremote Huskylens/pybricks_test.py
+.. literalinclude:: ../Projects/ESP32 Pupremote Huskylens/pybricks_test.py
     :language: python
 
 PyHuskyLens API

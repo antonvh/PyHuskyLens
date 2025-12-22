@@ -1,0 +1,90 @@
+"""
+PyHuskyLens - Universal HuskyLens driver for MicroPython
+Supports V1 and V2 hardware with I2C and Serial interfaces
+"""
+
+from .pyhuskylens import (
+    # Main classes
+    HuskyLens,
+    HuskyLensBase,
+    HuskyLensI2C,
+    HuskyLensSerial,
+    
+    # Data classes
+    Arrow,
+    Block,
+    
+    # Algorithms
+    ALGORITHM_MENU,
+    ALGORITHM_FACE_RECOGNITION,
+    ALGORITHM_OBJECT_TRACKING,
+    ALGORITHM_OBJECT_RECOGNITION,
+    ALGORITHM_LINE_TRACKING,
+    ALGORITHM_COLOR_RECOGNITION,
+    ALGORITHM_TAG_RECOGNITION,
+    ALGORITHM_OBJECT_CLASSIFICATION,
+    ALGORITHM_OCR,
+    ALGORITHM_LICENSE_RECOGNITION,
+    ALGORITHM_QR_CODE_RECOGNITION,
+    ALGORITHM_BARCODE_RECOGNITION,
+    ALGORITHM_FACE_EMOTION_RECOGNITION,
+    ALGORITHM_POSE_RECOGNITION,
+    ALGORITHM_HAND_RECOGNITION,
+    
+    # Colors
+    COLOR_BLACK,
+    COLOR_WHITE,
+    COLOR_RED,
+    COLOR_GREEN,
+    COLOR_BLUE,
+    COLOR_YELLOW,
+    
+    # Result dict keys
+    BLOCKS,
+    ARROWS,
+    FRAME,
+    FACES,
+    HANDS,
+    POSES,
+    
+    # Utilities
+    clamp_int,
+)
+
+__version__ = "2.0.0"
+__all__ = [
+    "HuskyLens",
+    "HuskyLensBase",
+    "HuskyLensI2C",
+    "HuskyLensSerial",
+    "Arrow",
+    "Block",
+    "ALGORITHM_MENU",
+    "ALGORITHM_FACE_RECOGNITION",
+    "ALGORITHM_OBJECT_TRACKING",
+    "ALGORITHM_OBJECT_RECOGNITION",
+    "ALGORITHM_LINE_TRACKING",
+    "ALGORITHM_COLOR_RECOGNITION",
+    "ALGORITHM_TAG_RECOGNITION",
+    "ALGORITHM_OBJECT_CLASSIFICATION",
+    "ALGORITHM_OCR",
+    "ALGORITHM_LICENSE_RECOGNITION",
+    "ALGORITHM_QR_CODE_RECOGNITION",
+    "ALGORITHM_BARCODE_RECOGNITION",
+    "ALGORITHM_FACE_EMOTION_RECOGNITION",
+    "ALGORITHM_POSE_RECOGNITION",
+    "ALGORITHM_HAND_RECOGNITION",
+    "COLOR_BLACK",
+    "COLOR_WHITE",
+    "COLOR_RED",
+    "COLOR_GREEN",
+    "COLOR_BLUE",
+    "COLOR_YELLOW",
+    "BLOCKS",
+    "ARROWS",
+    "FRAME",
+    "FACES",
+    "HANDS",
+    "POSES",
+    "clamp_int",
+]

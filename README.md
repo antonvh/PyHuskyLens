@@ -241,21 +241,19 @@ hl = HuskyLens('E')  # Port E
 
 To connect via UART, [use a breakout board](https://antonsmindstorms.com/product/uart-breakout-board-for-spike-and-ev3-openmv-compatible/) or solder the included HuskyLens wires to a spare Wedo2 plug pin 5 and 6 (ID1/ID2 lines).
 
-<div align="center">
-
-![Breakout Board](img/board.jpg) ![Wiring](img/connections.jpg)
-
-</div>
+![Wiring](img/connections.jpg)
 
 📖 [Full SPIKE/MINDSTORMS wiring tutorial](https://antonsmindstorms.com/2021/10/17/how-to-use-the-huskylens-with-lego-spike-prime-or-robot-inventor/)
 
 **Additional Resources:**
+
 - [Wedo2 pinout details](https://www.philohome.com/wedo2reverse/connect.htm)
 - [HuskyLens pinout](https://wiki.dfrobot.com/HUSKYLENS_V1.0_SKU_SEN0305_SEN0336#target_3)
 
 ### Power Supply
 
 Power the HuskyLens with:
+
 - ✅ **USB battery pack** (recommended - most stable)
 - ✅ **5V from robot** (if sufficient current available)
 - ⚠️ **SPIKE/51515 with LPF power**: Use a 3.3V-5V buck converter on M+ (8V) and M- (GND)
@@ -293,6 +291,7 @@ Explore the [Projects](Projects/) directory for complete working examples:
 #### `HuskyLens(port_or_i2c, baud=9600, debug=False)`
 
 Universal constructor with auto-detection. Accepts:
+
 - **I2C object**: Returns `HuskyLensI2C` instance
 - **UART object**: Returns `HuskyLensSerial` instance  
 - **Port string** (SPIKE/Inventor): Returns configured `HuskyLensSerial`
@@ -356,6 +355,7 @@ Get detected arrows (lines).
 
 **`get(algorithm=None, ID=None, learned=False)`** → `dict`  
 Get all detections. Returns:
+
 ```python
 {
     BLOCKS: [Block, ...],   # or 'blocks'
@@ -371,6 +371,7 @@ Get all detections. Returns:
 
 **`show_text(text, position=(10, 10), x=None, y=None, color=COLOR_WHITE)`** → `bool`  
 Draw text on HuskyLens screen. Supports both parameter styles:
+
 ```python
 hl.show_text("Hello", position=(50, 50))
 hl.show_text("Hello", x=50, y=50, color=COLOR_GREEN)
@@ -415,6 +416,7 @@ FRAME = 'frame'
 #### Block
 
 Standard detection block with:
+
 - `x`, `y` - Center position
 - `width`, `height` - Dimensions
 - `ID` - Object ID (if learned)
@@ -427,6 +429,7 @@ Standard detection block with:
 #### Arrow
 
 Line detection with:
+
 - `x_tail`, `y_tail` - Line start
 - `x_head`, `y_head` - Line end
 - `ID` - Line ID (if learned)
@@ -437,6 +440,7 @@ Line detection with:
 #### Face (V2 only)
 
 Extends Block with facial landmarks:
+
 - `leye_x`, `leye_y` - Left eye
 - `reye_x`, `reye_y` - Right eye
 - `nose_x`, `nose_y` - Nose tip
@@ -446,6 +450,7 @@ Extends Block with facial landmarks:
 #### Hand (V2 only)
 
 Extends Block with 21 keypoints:
+
 - **Wrist**: `wrist_x`, `wrist_y`
 - **Thumb**: `thumb_cmc_*`, `thumb_mcp_*`, `thumb_ip_*`, `thumb_tip_*`
 - **Index**: `index_finger_mcp_*`, `index_finger_pip_*`, `index_finger_dip_*`, `index_finger_tip_*`
@@ -456,6 +461,7 @@ Extends Block with 21 keypoints:
 #### Pose (V2 only)
 
 Extends Block with 17 body keypoints:
+
 - `nose_x`, `nose_y`
 - `leye_x`, `leye_y`, `reye_x`, `reye_y`
 - `lear_x`, `lear_y`, `rear_x`, `rear_y`
@@ -485,12 +491,14 @@ Clamp value to specified range.
 ### Connection Issues
 
 **"No device found" or `knock()` returns `False`**
+
 - ✓ Check I2C address: 0x32 (V1) or 0x50 (V2)
 - ✓ Verify UART wiring: Green=Tx, Blue=Rx (check you haven't swapped them)
 - ✓ Ensure 5V power is connected
 - ✓ Try `hl = HuskyLens(i2c, debug=True)` to see communication details
 
-**Random crashes or freezes**
+#### Random crashes or freezes
+
 - ⚠️ Use external USB power instead of motor power
 - ⚠️ Check voltage stability (use multimeter)
 - ⚠️ For SPIKE/51515: Consider downgrading to firmware 0.4.7
@@ -498,12 +506,14 @@ Clamp value to specified range.
 ### Detection Issues
 
 **No data returned from `get_blocks()` or `get_arrows()`**
+
 - ✓ Call `knock()` first to verify connection
 - ✓ Check that algorithm is set with `set_alg()`
 - ✓ Ensure objects are learned (press and hold button on HuskyLens)
 - ✓ Check if `learned=True` filter is too restrictive
 
-**Slow performance**
+#### Slow performance
+
 - ✓ I2C is generally faster than UART
 - ✓ Reduce detection frequency in your loop
 - ✓ Use specific filters (`ID=`, `learned=True`) to reduce data
@@ -511,17 +521,20 @@ Clamp value to specified range.
 
 ### Platform-Specific
 
-**SPIKE Prime / Robot Inventor**
+#### SPIKE Prime / Robot Inventor
+
 - Port initialization is handled automatically by `HuskyLens('E')`
 - Wait ~2 seconds after initialization for bootup
 - Use `debug=False` to reduce memory usage
 
-**ESP32**
+#### ESP32
+
 - Use `SoftI2C` if hardware I2C has conflicts
 - Default I2C pins: SCL=22, SDA=21
 - Reduce I2C frequency if communication errors occur: `freq=100000` or lower
 
-**EV3 Pybricks**
+#### EV3 Pybricks
+
 - UART is the only option (no I2C support)
 - Use `UARTDevice(Port.S1, 9600)`
 - Ensure pybricks-micropython v2.0+

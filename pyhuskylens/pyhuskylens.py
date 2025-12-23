@@ -1,9 +1,12 @@
 """
 HuskyLens Universal Driver for MicroPython
 Supports V1 and V2 hardware with I2C and Serial interfaces
-
-Copyright (c) 2025 Antons Mindstorms
 """
+
+__version__ = "2.1.0"
+__author__ = "Anton Vanhoucke"
+__copyright__ = "Copyright (c) 2025 Antons Mindstorms"
+__license__ = "MIT"
 
 import struct
 from math import atan2, degrees

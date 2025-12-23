@@ -17,8 +17,9 @@ try:
     from time import sleep_ms
 except ImportError:
     native = lambda f: f  # Fallback for CPython
-    
+
     import time
+
     def sleep_ms(ms):
         time.sleep(ms / 1000.0)
 

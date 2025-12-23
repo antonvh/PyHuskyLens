@@ -1,0 +1,8 @@
+{
+    "urls": [
+        ["pyhuskylens/__init__.py", "github:antonvh/PyHuskyLens/pyhuskylens/__init__.py"],
+        ["pyhuskylens/pyhuskylens.py", "github:antonvh/PyHuskyLens/pyhuskylens/pyhuskylens.py"]
+    ],
+    "deps": [],
+    "version": "2.1.0"
+}

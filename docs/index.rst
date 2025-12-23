@@ -30,6 +30,36 @@ and gets Image AI data.
 
 
 
+Installation
+------------
+
+ESP32 / MicroPython
+~~~~~~~~~~~~~~~~~~~
+
+**Recommended: Using ViperIDE**
+
+The easiest way to install is using `ViperIDE <https://viper-ide.org/>`_:
+
+1. Open ViperIDE in your browser
+2. Connect to your ESP32 device
+3. Go to **tools** → **Install package via link**
+4. Enter: ``github:antonvh/PyHuskyLens``
+5. Click Install
+
+**Alternative: Using mip**
+
+Install from your device (if internet-connected):
+
+.. code-block:: python
+
+    import mip
+    mip.install("github:antonvh/PyHuskyLens")
+
+**Manual Installation**
+
+Copy ``pyhuskylens/pyhuskylens.py`` to your device's filesystem.
+
+
 Example
 -------
 Run this on LMS-ESP32

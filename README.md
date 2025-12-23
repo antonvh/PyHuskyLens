@@ -42,9 +42,21 @@ A universal Python library for connecting the HuskyLens AI camera to robotics pl
 
 ### SPIKE Prime and Robot Inventor 51515
 
-Copy and paste the contents of [pyhuskylens/pyhuskylens.py](pyhuskylens/pyhuskylens.py) above your script, or use the [Library](Library) symlink for backward compatibility.
+Copy and paste the contents of [pyhuskylens/pyhuskylens.py](pyhuskylens/pyhuskylens.py) above your script.
 
 ### ESP32 / MicroPython
+
+#### Recommended: Using ViperIDE
+
+The easiest way to install is using [ViperIDE](https://viper-ide.org/):
+
+1. Open ViperIDE in your browser
+2. Connect to your ESP32 device
+3. Go to **Tools** → **Install package via link**
+4. Enter: `github:antonvh/PyHuskyLens`
+5. Click Install
+
+#### Alternative: Using mip
 
 Install from your device (if internet-connected):
 
@@ -53,7 +65,9 @@ import mip
 mip.install("github:antonvh/PyHuskyLens")
 ```
 
-Or copy `pyhuskylens/pyhuskylens.py` to your device's filesystem.
+#### Manual Installation
+
+Copy `pyhuskylens/pyhuskylens.py` to your device's filesystem.
 
 ### EV3 with pybricks-micropython
 

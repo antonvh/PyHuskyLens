@@ -136,7 +136,8 @@ POSES = "poses"
 
 # Internal I2C Register for V1
 _I2C_REG_V1 = const(0x0C)
-
+_I2C_ADDR_V1 = 0x32
+_I2C_ADDR_V2 = 0x50
 
 class Arrow:
     """Arrow detection result."""
@@ -925,9 +926,6 @@ class HuskyLensBase:
 class HuskyLensI2C(HuskyLensBase):
     """HuskyLens I2C driver."""
 
-    ADDR_V1 = const(0x32)
-    ADDR_V2 = const(0x50)
-
     def __init__(self, i2c, debug=False):
         super().__init__(debug)
         self.i2c = i2c
@@ -937,10 +935,10 @@ class HuskyLensI2C(HuskyLensBase):
 
     def _detect_version(self):
         devices = self.i2c.scan()
-        if self.ADDR_V1 in devices:
-            self.version, self.address = 1, self.ADDR_V1
-        elif self.ADDR_V2 in devices:
-            self.version, self.address = 2, self.ADDR_V2
+        if _I2C_ADDR_V1 in devices:
+            self.version, self.address = 1, _I2C_ADDR_V1
+        elif _I2C_ADDR_V2 in devices:
+            self.version, self.address = 2, _I2C_ADDR_V2
         if self.debug and self.version:
             print("HuskyLens V" + str(self.version) + " @ 0x" + hex(self.address)[2:])
 
@@ -1034,9 +1032,6 @@ class HuskyLensSerial(HuskyLensBase):
 class HuskyLensI2C_RPi(HuskyLensBase):
     """HuskyLens I2C driver for Raspberry Pi using smbus2."""
 
-    ADDR_V1 = 0x32
-    ADDR_V2 = 0x50
-
     def __init__(self, bus=1, address=None, debug=False):
         """Initialize Raspberry Pi I2C.
 
@@ -1062,18 +1057,20 @@ class HuskyLensI2C_RPi(HuskyLensBase):
     def _detect_version(self):
         """Detect HuskyLens version by scanning I2C addresses."""
         # Try to read from known addresses
-        for addr in [self.ADDR_V1, self.ADDR_V2]:
+        for addr in [_I2C_ADDR_V1, _I2C_ADDR_V2]:
             try:
                 # Attempt a test read
-                if addr == self.ADDR_V1:
+                if addr == _I2C_ADDR_V1:
                     self.bus.read_byte_data(addr, 0x0C)
-                    self.version, self.address = 1, addr
+                    self.version = 1
+                    self.address = addr
                     if self.debug:
                         print("HuskyLens V1 @ 0x%02x" % addr)
                     return
                 else:
                     self.bus.read_byte(addr)
-                    self.version, self.address = 2, addr
+                    self.version = 2
+                    self.address = addr
                     if self.debug:
                         print("HuskyLens V2 @ 0x%02x" % addr)
                     return

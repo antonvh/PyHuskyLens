@@ -51,7 +51,7 @@ from .pyhuskylens import (
     clamp_int,
 )
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 __all__ = [
     "HuskyLens",
     "HuskyLensBase",

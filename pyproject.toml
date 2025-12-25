@@ -1,6 +1,6 @@
 [project]
 name = "pyhuskylens"
-version = "2.1.0"
+version = "2.2.0"
 description = "Universal Python library for HuskyLens AI camera - supports MicroPython and CPython (Raspberry Pi)"
 authors = [
     {name = "Anton Vanhoucke", email = "anton@antonsmindstorms.com"}

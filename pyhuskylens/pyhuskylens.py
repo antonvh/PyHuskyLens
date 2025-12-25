@@ -3,7 +3,7 @@ HuskyLens Universal Driver for MicroPython
 Supports V1 and V2 hardware with I2C and Serial interfaces
 """
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 __author__ = "Anton Vanhoucke"
 __copyright__ = "Copyright (c) 2025 Antons Mindstorms"
 __license__ = "MIT"
@@ -138,6 +138,7 @@ POSES = "poses"
 _I2C_REG_V1 = const(0x0C)
 _I2C_ADDR_V1 = 0x32
 _I2C_ADDR_V2 = 0x50
+
 
 class Arrow:
     """Arrow detection result."""

@@ -40,7 +40,7 @@ A universal Python library for connecting the HuskyLens AI camera to robotics pl
 
 ## Installation
 
-### SPIKE Prime and Robot Inventor 51515
+### SPIKE Legacy and Robot Inventor 51515
 
 Copy and paste the contents of [pyhuskylens/pyhuskylens.py](pyhuskylens/pyhuskylens.py) above your script.
 

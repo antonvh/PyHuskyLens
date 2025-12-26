@@ -27,12 +27,6 @@ except ImportError:
         return value
 
 
-# Internal demo constants (not exported)
-_EV3_PYBRICKS_SERIAL = const(0)
-_INVENTOR_SERIAL = const(1)
-_ESP32_I2C = const(3)
-_MAIN_DEMO_TYPE = _ESP32_I2C  # Change this to test different interfaces
-
 # Internal timing constants (milliseconds) - adjust these to tune performance
 _DELAY_AFTER_WRITE = const(5)  # Delay after writing commands
 _DELAY_V2_INITIAL = const(50)  # Initial delay for V2 get() response
@@ -973,10 +967,19 @@ class HuskyLensSerial(HuskyLensBase):
         super().__init__(debug)
         self.uart = uart
         # Abstract waiting method
-        if hasattr(uart, "waiting"):
-            self._has_data = lambda: uart.waiting()
-        elif hasattr(uart, "any"):
-            self._has_data = lambda: uart.any()
+        if hasattr(uart, "lower"):
+            from hub import port
+            self.uart = eval("port." + uart)
+        if hasattr(uart, "mode"):
+            uart.mode(1)  # UART mode
+            sleep_ms(300)
+            uart.baud(115200)
+            uart.pwm(100)  # Power the device
+            
+        if hasattr(self.uart, "waiting"):
+            self._has_data = lambda: self.uart.waiting()
+        elif hasattr(self.uart, "any"):
+            self._has_data = lambda: self.uart.any()
         else:
             self._has_data = lambda: True  # Fallback: always try to read
         self._detect_version()
@@ -1030,155 +1033,6 @@ class HuskyLensSerial(HuskyLensBase):
                 print("Flush error: " + str(e))
 
 
-class HuskyLensI2C_RPi(HuskyLensBase):
-    """HuskyLens I2C driver for Raspberry Pi using smbus2."""
-
-    def __init__(self, bus=1, address=None, debug=False):
-        """Initialize Raspberry Pi I2C.
-
-        Args:
-            bus: I2C bus number (default 1 for /dev/i2c-1)
-            address: I2C address (auto-detected if None)
-            debug: Enable debug output
-        """
-        super().__init__(debug)
-        try:
-            import smbus2
-
-            self.bus = smbus2.SMBus(bus)
-        except ImportError:
-            raise ImportError(
-                "smbus2 required for Raspberry Pi I2C. Install: pip install smbus2"
-            )
-
-        self.address = address
-        self.use_register = False
-        self._detect_version()
-
-    def _detect_version(self):
-        """Detect HuskyLens version by scanning I2C addresses."""
-        # Try to read from known addresses
-        for addr in [_I2C_ADDR_V1, _I2C_ADDR_V2]:
-            try:
-                # Attempt a test read
-                if addr == _I2C_ADDR_V1:
-                    self.bus.read_byte_data(addr, 0x0C)
-                    self.version = 1
-                    self.address = addr
-                    if self.debug:
-                        print("HuskyLens V1 @ 0x%02x" % addr)
-                    return
-                else:
-                    self.bus.read_byte(addr)
-                    self.version = 2
-                    self.address = addr
-                    if self.debug:
-                        print("HuskyLens V2 @ 0x%02x" % addr)
-                    return
-            except:
-                continue
-
-        self.version = None
-        if self.debug:
-            print("No HuskyLens found on I2C")
-
-    def _transport_write(self, data):
-        """Write data to I2C bus."""
-        if self.version == 1:
-            # V1: Write to register 0x0C
-            self.bus.write_i2c_block_data(self.address, 0x0C, list(data))
-        else:
-            # V2: Direct write
-            self.bus.write_i2c_block_data(self.address, data[0], list(data[1:]))
-
-    def _transport_read(self, size):
-        """Read data from I2C bus."""
-        if self.version == 1:
-            # V1: Read from register 0x0C
-            return bytes(self.bus.read_i2c_block_data(self.address, 0x0C, size))
-        else:
-            # V2: Direct read
-            return bytes(self.bus.read_i2c_block_data(self.address, 0, size))
-
-    def _transport_flush(self):
-        """Flush I2C buffer (V2 only)."""
-        if self.version == 2:
-            for _ in range(5):
-                try:
-                    self.bus.read_i2c_block_data(self.address, 0, 16)
-                except:
-                    break
-
-
-class HuskyLensSerial_RPi(HuskyLensBase):
-    """HuskyLens Serial/UART driver for Raspberry Pi using pyserial."""
-
-    def __init__(self, port="/dev/ttyUSB0", baud=9600, debug=False):
-        """Initialize Raspberry Pi Serial.
-
-        Args:
-            port: Serial port path (e.g., '/dev/ttyUSB0', '/dev/ttyAMA0')
-            baud: Baud rate (default 9600)
-            debug: Enable debug output
-        """
-        super().__init__(debug)
-        try:
-            import serial
-
-            self.uart = serial.Serial(port, baud, timeout=0.1)
-        except ImportError:
-            raise ImportError(
-                "pyserial required for Raspberry Pi Serial. Install: pip install pyserial"
-            )
-        except Exception as e:
-            raise Exception("Failed to open serial port %s: %s" % (port, str(e)))
-
-        self._detect_version()
-
-    def _detect_version(self):
-        """Detect HuskyLens version by trying knock commands."""
-        # Try V2 first
-        self.version = 2
-        if self.knock():
-            if self.debug:
-                print("HuskyLens V2 (Serial)")
-            return
-        # Try V1
-        self.version = 1
-        if self.knock():
-            if self.debug:
-                print("HuskyLens V1 (Serial)")
-            return
-        self.version = None
-        if self.debug:
-            print("No HuskyLens on Serial")
-
-    def _transport_write(self, data):
-        """Write data to serial port."""
-        self.uart.write(data)
-
-    def _transport_read(self, size):
-        """Read data from serial port."""
-        data = bytearray()
-        for _ in range(150):
-            if self.uart.in_waiting:
-                chunk = self.uart.read(1)
-                if chunk:
-                    data.extend(chunk)
-            if len(data) >= size:
-                return bytes(data[:size])
-            sleep_ms(_DELAY_SERIAL_READ)
-        return bytes(data)
-
-    def _transport_flush(self):
-        """Flush serial buffer."""
-        try:
-            self.uart.reset_input_buffer()
-        except Exception as e:
-            if self.debug:
-                print("Flush error: " + str(e))
-
-
 # Backward compatibility wrapper
 def HuskyLens(port_or_i2c, baud=9600, debug=False, **kwargs):
     """
@@ -1221,11 +1075,25 @@ def HuskyLens(port_or_i2c, baud=9600, debug=False, **kwargs):
     """
     # Raspberry Pi I2C bus number (integer)
     if isinstance(port_or_i2c, int):
-        return HuskyLensI2C_RPi(bus=port_or_i2c, debug=debug)
+        try:
+            from .rpi import HuskyLensI2C_RPi
+
+            return HuskyLensI2C_RPi(bus=port_or_i2c, debug=debug)
+        except ImportError:
+            raise ImportError(
+                "Raspberry Pi support requires smbus2. Install: pip install smbus2"
+            )
 
     # Raspberry Pi serial port path (starts with /dev/)
     if isinstance(port_or_i2c, str) and port_or_i2c.startswith("/dev/"):
-        return HuskyLensSerial_RPi(port=port_or_i2c, baud=baud, debug=debug)
+        try:
+            from .rpi import HuskyLensSerial_RPi
+
+            return HuskyLensSerial_RPi(port=port_or_i2c, baud=baud, debug=debug)
+        except ImportError:
+            raise ImportError(
+                "Raspberry Pi support requires pyserial. Install: pip install pyserial"
+            )
 
     # Check if it's an I2C object (has readfrom or writeto methods)
     if hasattr(port_or_i2c, "readfrom") or hasattr(port_or_i2c, "writeto"):
@@ -1269,98 +1137,3 @@ def HuskyLens(port_or_i2c, baud=9600, debug=False, **kwargs):
 def clamp_int(value, min_val=-100, max_val=100):
     """Clamp integer value to range."""
     return max(min_val, min(max_val, int(value)))
-
-
-# Demo
-if __name__ == "__main__":
-    if _MAIN_DEMO_TYPE == _ESP32_I2C:
-        from machine import Pin, SoftI2C
-
-        print("=" * 60)
-        print("HuskyLens Demo - I2C and Serial")
-        print("=" * 60)
-
-        # I2C Example
-        print("\n--- I2C Example ---")
-        i2c = SoftI2C(scl=Pin(22), sda=Pin(21), freq=100000)
-        hl_i2c = HuskyLensI2C(i2c, debug=True)
-
-        if not hl_i2c.version:
-            print("X No HuskyLens found on I2C, scl=Pin(22), sda=Pin(21)")
-            devices = i2c.scan()
-            print("I2C devices: " + str([hex(d) for d in devices]))
-        else:
-            print("V Found HuskyLens V" + str(hl_i2c.version) + " on I2C\n")
-
-            # Test connection
-            print("Testing connection...")
-            if hl_i2c.knock():
-                print("V I2C Connected!")
-
-                # Get version (V1 only)
-                if hl_i2c.version == 1:
-                    version = hl_i2c.get_version()
-                    if version:
-                        print("V Firmware: " + str(version))
-
-                # Draw text
-                print("\nDrawing text...")
-                hl_i2c.set_alg(0)
-                hl_i2c.show_text("Hello!", position=(50, 50), color=COLOR_GREEN)
-                print("V Text demo complete")
-
-                # Set algorithm and get blocks
-                print("\nSetting algorithm to Object Recognition...")
-                hl_i2c.set_alg(ALGORITHM_OBJECT_RECOGNITION)
-                sleep_ms(2000)
-                print("Getting blocks...")
-                for i in range(20):
-                    blocks = hl_i2c.get_blocks()
-                    print("V Found " + str(len(blocks)) + " blocks")
-                    for block in blocks:
-                        print("  " + str(block))
-            else:
-                print("X Connection failed!")
-
-    if _MAIN_DEMO_TYPE == _EV3_PYBRICKS_SERIAL or _MAIN_DEMO_TYPE == _INVENTOR_SERIAL:
-        if _MAIN_DEMO_TYPE == _EV3_PYBRICKS_SERIAL:
-            print("\n--- Serial Example Ev3dev Pybricks ---")
-            from pybricks.iodevices import UARTDevice
-            from pybricks.parameters import Port
-
-            uart = UARTDevice(Port.A, 9600)
-
-        elif _MAIN_DEMO_TYPE == _INVENTOR_SERIAL:
-            print("\n--- Serial Example LEGO Inventor and SPIKE LEGACY---")
-            from hub import port
-
-            uart = port.A
-            uart.mode(1)
-            sleep_ms(300)
-            uart.baud(9600)
-            # Put voltage on M+ or M- leads
-            uart.pwm(100)
-            sleep_ms(2200)  # Give the huskylens some time to boot
-            sleep_ms(300)
-            uart.read(32)
-
-        hl_serial = HuskyLensSerial(uart, debug=True)
-
-        if hl_serial.version:
-            print("V Found HuskyLens V" + str(hl_serial.version) + " on Serial\n")
-
-            if hl_serial.knock():
-                print("V Serial Connected!")
-
-                # Get arrows
-                hl_serial.set_alg(ALGORITHM_LINE_TRACKING)
-                arrows = hl_serial.get_arrows()
-                print("V Found " + str(len(arrows)) + " arrows")
-                for arrow in arrows:
-                    print("  " + str(arrow))
-        else:
-            print("X No HuskyLens on Serial")
-
-    print("\n" + "=" * 60)
-    print("Demo complete!")
-    print("=" * 60)

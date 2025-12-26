@@ -68,3 +68,6 @@ dmypy.json
 *.local
 .env
 .envrc
+
+# Installer (temporary files only)
+installer/mpy/

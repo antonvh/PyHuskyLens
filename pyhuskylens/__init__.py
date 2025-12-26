@@ -6,11 +6,8 @@ Supports V1 and V2 hardware with I2C and Serial interfaces
 from .pyhuskylens import (
     # Main classes
     HuskyLens,
-    HuskyLensBase,
     HuskyLensI2C,
     HuskyLensSerial,
-    HuskyLensI2C_RPi,
-    HuskyLensSerial_RPi,
     # Data classes
     Arrow,
     Block,
@@ -50,6 +47,15 @@ from .pyhuskylens import (
     # Utilities
     clamp_int,
 )
+
+# Raspberry Pi classes (optional, requires smbus2/pyserial)
+try:
+    from .rpi import HuskyLensI2C_RPi, HuskyLensSerial_RPi
+except ImportError:
+    # Not on Raspberry Pi or dependencies not installed
+    HuskyLensI2C_RPi = None
+    HuskyLensSerial_RPi = None
+
 
 __version__ = "2.2.0"
 __all__ = [

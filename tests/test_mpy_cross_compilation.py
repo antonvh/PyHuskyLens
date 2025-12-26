@@ -6,8 +6,10 @@ import sys
 import tempfile
 import shutil
 from pathlib import Path
+import pytest
 
 
+@pytest.mark.fast
 def test_mpy_cross_available():
     """Test that mpy-cross is available in the system."""
     try:
@@ -25,6 +27,7 @@ def test_mpy_cross_available():
         pytest.skip(f"mpy-cross is not installed: {e}")
 
 
+@pytest.mark.fast
 def test_pyhuskylens_compiles_with_mpy_cross():
     """Test that pyhuskylens.py compiles with mpy-cross."""
     # Get the path to the main library file
@@ -74,6 +77,7 @@ def test_pyhuskylens_compiles_with_mpy_cross():
             raise AssertionError("mpy-cross compilation timed out after 30 seconds")
 
 
+@pytest.mark.fast
 def test_pyhuskylens_compiles_with_optimization():
     """Test that pyhuskylens.py compiles with mpy-cross optimization levels."""
     library_path = Path(__file__).parent.parent / "pyhuskylens" / "pyhuskylens.py"
@@ -132,6 +136,7 @@ def test_pyhuskylens_compiles_with_optimization():
                 )
 
 
+@pytest.mark.fast
 def test_pyhuskylens_syntax_for_micropython():
     """Test that pyhuskylens.py doesn't use syntax incompatible with MicroPython."""
     library_path = Path(__file__).parent.parent / "pyhuskylens" / "pyhuskylens.py"

@@ -108,22 +108,3 @@ pip install pyhuskylens[all]      # For both
 2. Create a GitHub release with release notes
 
 3. Update documentation links if needed
-
-## Troubleshooting
-
-**"Invalid or non-existent authentication information"**
-
-- Check your API token is correct
-- Ensure username is `__token__`
-- Verify the token has upload permissions
-
-**"File already exists"**
-
-- PyPI doesn't allow re-uploading the same version
-- Bump the version in `pyproject.toml` and `pyhuskylens/__init__.py`
-- Rebuild: `python -m build`
-
-**"Package validation failed"**
-
-- Run `twine check dist/*` to see specific issues
-- Ensure README.md renders correctly on PyPI

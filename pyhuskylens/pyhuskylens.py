@@ -51,6 +51,7 @@ _CMD_REQUEST_ALGORITHM = const(0x2D)
 _CMD_RETURN_OK = const(0x2E)
 _CMD_REQUEST_CUSTOM_TEXT = const(0x34)
 _CMD_REQUEST_CLEAR_TEXT = const(0x35)
+_CMD_REQUEST_SAVE_SCREENSHOT = const(0x39)
 _CMD_REQUEST_FIRMWARE_VERSION = const(0x3C)
 
 # Internal V2 Commands
@@ -952,6 +953,16 @@ class HuskyLensBase:
         if self.version != 2:
             return False
         self._cmd_v2(_CMD_ACTION_CLEAN_RECT_V2, 0)
+        return self.knock()
+
+    def save_screenshot(self):
+        """Save screenshot to SD card. (Maybe v1 only?)"""
+        v = self.version
+        if v == 1:
+            self._cmd_v1(_CMD_REQUEST_SAVE_SCREENSHOT)
+        else:
+            return False
+            # self._cmd_v2(_CMD_REQUEST_SAVE_SCREENSHOT)
         return self.knock()
 
 
